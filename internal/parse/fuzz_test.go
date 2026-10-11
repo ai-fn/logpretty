@@ -3,10 +3,12 @@ package parse
 import (
 	"bytes"
 	"encoding/json"
+	"math/big"
 	"regexp"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/ai-fn/logpretty/internal/entry"
@@ -345,4 +347,96 @@ func appendLogfmtPair(dst, key, value []byte, quote bool) []byte {
 		dst = append(dst, c)
 	}
 	return append(dst, '"')
+}
+
+// referenceDateTime is the obvious implementation parseDateTime must agree with: time.Parse over every layout.
+func referenceDateTime(s string, loc *time.Location) (time.Time, bool) {
+	// time.Parse also takes a run of spaces for one and an hour of one digit, which no logger writes.
+	if len(s) < 13 || !isDigit(s[11]) || !isDigit(s[12]) {
+		return time.Time{}, false
+	}
+	for _, sep := range []string{"T", " "} {
+		for _, zone := range []string{"", "Z07:00", "Z0700", "Z07"} {
+			if t, err := time.ParseInLocation("2006-01-02"+sep+"15:04:05"+zone, s, loc); err == nil {
+				// The parsed time keeps the zone it was written in, so this is the year as written.
+				return t, 2000 <= t.Year() && t.Year() <= 2099
+			}
+		}
+	}
+	return time.Time{}, false
+}
+
+func FuzzDateTime(f *testing.F) {
+	for _, seed := range []string{
+		"2026-10-11T12:00:00Z", "2026-10-11T12:00:00+03:00", "2026-10-11T12:00:00-0730", "2026-10-11T12:00:00-08",
+		"2026-10-11T12:00:00.123456789Z", "2026-10-11T12:00:00.1234567899+24:60", "2026-10-11 12:00:00,123",
+		"2026-10-11 12:00:00", "2028-02-29T23:59:59Z", "2026-02-29T00:00:00Z", "2026-04-31T00:00:00Z",
+		"1999-12-31T23:59:59Z", "2100-01-01T00:00:00Z", "2000-01-01T00:00:00+14:00", "2099-12-31T23:59:59-12:00",
+		"2026-10-11T24:00:00Z", "2026-10-11T12:60:00Z", "2026-10-11T12:00:60Z", "2026-10-11T12:00:00.Z",
+		"2026-10-11T12:00:00+25:00", "2026-10-11T12:00:00+00:61", "2026-10-11T12:00:00+3", "2026-10-11T12:00:00 UTC",
+		"2026-10-11t12:00:00z", "2026-10-11", "1791720000", "", "2000-10-01 0:00:00", "2000-10-01  0:00:00",
+		"2000-10-01  00:00:00",
+	} {
+		f.Add(seed)
+	}
+
+	f.Fuzz(func(t *testing.T, s string) {
+		want, wantOK := referenceDateTime(s, testLoc)
+
+		// Clipped, so that a read past the end panics instead of finding spare capacity.
+		got, ok := parseDateTime(slices.Clip([]byte(s)), testLoc)
+
+		if ok != wantOK {
+			t.Fatalf("parseDateTime(%q) accepted = %v, time.Parse says %v", s, ok, wantOK)
+		}
+		if ok && !got.Equal(want) {
+			t.Fatalf("parseDateTime(%q) = %s, time.Parse gives %s", s, got.Format(time.RFC3339Nano), want.Format(time.RFC3339Nano))
+		}
+	})
+}
+
+var unixTimeNumber = regexp.MustCompile(`^[0-9]{1,19}(\.[0-9]+)?$`)
+
+// referenceUnixTime is the obvious implementation parseUnixTime must agree with: exact arithmetic on fractions.
+func referenceUnixTime(s string) (time.Time, bool) {
+	if !unixTimeNumber.MatchString(s) {
+		return time.Time{}, false
+	}
+	value, _ := new(big.Rat).SetString(s)
+	for _, perSecond := range []int64{1, 1e3, 1e6, 1e9} {
+		seconds := new(big.Rat).Quo(value, big.NewRat(perSecond, 1))
+		if seconds.Cmp(big.NewRat(946684800, 1)) < 0 || seconds.Cmp(big.NewRat(4102444800, 1)) >= 0 {
+			continue
+		}
+		nanos := new(big.Rat).Mul(seconds, big.NewRat(1e9, 1))
+		// Integer division rounds down, since the number is not negative.
+		return time.Unix(0, new(big.Int).Quo(nanos.Num(), nanos.Denom()).Int64()).UTC(), true
+	}
+	return time.Time{}, false
+}
+
+func FuzzUnixTime(f *testing.F) {
+	for _, seed := range []string{
+		"1791720000", "1791720000123", "1791720000123456", "1791720000123456789", "1791720000.1234567",
+		"1791720000.1234567899", "1791720000123.5", "1791720000123456.25", "1791720000123456789.5", "001791720000",
+		"946684800", "946684799", "4102444799", "4102444800", "946684799999.999", "4102444799999999999.9",
+		"17917200001", "17917200001234567890", "18446744075501271616", "5", "0", "", "-1791720000", "1.79172e9",
+		"1791720000.", ".5", "1791720000,5", "1791720000.5x",
+	} {
+		f.Add(seed)
+	}
+
+	f.Fuzz(func(t *testing.T, s string) {
+		want, wantOK := referenceUnixTime(s)
+
+		// Clipped, so that a read past the end panics instead of finding spare capacity.
+		got, ok := parseUnixTime(slices.Clip([]byte(s)))
+
+		if ok != wantOK {
+			t.Fatalf("parseUnixTime(%q) accepted = %v, the reference says %v", s, ok, wantOK)
+		}
+		if ok && !got.Equal(want) {
+			t.Fatalf("parseUnixTime(%q) = %s, the reference gives %s", s, got.Format(time.RFC3339Nano), want.Format(time.RFC3339Nano))
+		}
+	})
 }
