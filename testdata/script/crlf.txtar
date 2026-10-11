@@ -1,7 +1,6 @@
 # CRLF line endings become LF.
-[!exec:printf] skip 'needs printf'
-exec printf 'one\r\ntwo\r\n'
-stdin stdout
+write input.log 'one\r\ntwo\r\n'
+stdin input.log
 exec logpretty
 cmp stdout want
 ! stderr .
