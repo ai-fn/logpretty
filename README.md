@@ -28,17 +28,18 @@ kubectl logs -f pod | logpretty --level warn --where 'user_id=42' --fields msg,l
 ```
 
 > [!NOTE]
-> **Status: early development.** Stdin reading and per-line format detection work. Pretty
-> rendering, colors and the filters are not implemented yet, so the command above is the
-> target usage, not something you can run today.
+> **Status: early development.** Streaming stdin to stdout works, and for now the output equals
+> the input. Format detection, pretty rendering, colors and the filters are not implemented yet,
+> so the command above is the target usage, not something you can run today.
 
 ## Features
 
 | Feature | Status |
 |---|---|
-| Read stdin line by line, any line length (lines over 1 MiB are truncated, the stream keeps flowing) | Available |
-| Per-line format detection: JSON, logfmt, plain text | Available (prototype) |
+| Stream stdin to stdout line by line, any line length (longer lines are truncated with an `…[+N]` marker and the stream keeps flowing) | Available |
+| `-max-line N`: longest line to keep, in bytes (default 1 MiB) | Available |
 | Exit codes: `0` success, `1` read/write error, `2` invalid arguments | Available |
+| Per-line format detection: JSON, logfmt, plain text | Not yet |
 | Readable output with aligned level badges, timestamps and `key=value` fields | Not yet |
 | Colors: `--color=auto\|always\|never`, `NO_COLOR` support | Not yet |
 | Safe output: control characters from logs never reach the terminal raw | Not yet |
@@ -60,13 +61,14 @@ make build          # produces bin/logpretty
 
 ## Usage
 
-For now `logpretty` prints one summary line per input line: the detected format (plus the `id` for JSON) and the line length.
+For now `logpretty` passes lines through: it turns CRLF into LF and marks truncated lines.
 
 ```console
-$ printf '{"id":1,"msg":"started"}\nlevel=warn msg=slow ms=12\nplain text\n' | logpretty
-json id="1"                    len=24
-logfmt                         len=25
-text                           len=10
+$ printf 'one\r\ntwo\n' | logpretty
+one
+two
+$ printf '0123456789\n' | logpretty -max-line 4
+0123…[+6]
 ```
 
 ## Development
@@ -89,7 +91,9 @@ on every pull request and every push to `main`.
 ## Project structure
 
 ```
-cmd/logpretty/        # CLI entrypoint: run() holds the logic, main() only calls it
+cmd/logpretty/        # main() only calls app.Run
+internal/app/         # flags and the read-to-write pipeline
+internal/linereader/  # reads lines of any length and truncates at a limit
 assets/               # logo
 .github/workflows/    # CI
 Makefile              # build, test, lint, fuzz, bench, vuln
