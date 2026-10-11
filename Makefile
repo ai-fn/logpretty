@@ -13,8 +13,10 @@ help: ## Show available targets
 build: ## Build bin/logpretty
 	go build -o $(BIN) ./cmd/logpretty
 
-test: ## Run tests with the race detector and coverage
+# Under the race detector sync.Pool drops items, so the allocation checks that go through json.Valid are skipped: hence the second run.
+test: ## Run tests with the race detector and coverage, then without it
 	go test -race -cover ./...
+	go test ./...
 
 lint: ## Run golangci-lint
 	golangci-lint run

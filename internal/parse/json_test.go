@@ -245,9 +245,17 @@ func TestAppendJSONFieldsDeepNesting(t *testing.T) {
 }
 
 func TestAppendJSONFieldsDoesNotAllocate(t *testing.T) {
-	line := []byte(`{"time":"2026-10-11T12:00:00Z","level":"info","msg":"request \"done\"","status":200,"http":{"path":"/x"},"tags":["a"]}`)
 	dst := make([]entry.Field, 0, 16)
 
+	plain := bytes.Repeat([]byte("plain text "), 10)
+	if allocs := testing.AllocsPerRun(100, func() { _, _ = appendJSONFields(dst, plain) }); allocs != 0 {
+		t.Errorf("rejecting a line allocates %v times per call, want 0", allocs)
+	}
+
+	if raceEnabled {
+		t.Skip("json.Valid allocates under the race detector")
+	}
+	line := []byte(`{"time":"2026-10-11T12:00:00Z","level":"info","msg":"request \"done\"","status":200,"http":{"path":"/x"},"tags":["a"]}`)
 	allocs := testing.AllocsPerRun(100, func() {
 		if _, ok := appendJSONFields(dst, line); !ok {
 			t.Fatal("rejected a JSON object")
@@ -255,11 +263,5 @@ func TestAppendJSONFieldsDoesNotAllocate(t *testing.T) {
 	})
 	if allocs != 0 {
 		t.Errorf("appendJSONFields allocates %v times per call, want 0", allocs)
-	}
-
-	// A rejected line must be as cheap.
-	plain := bytes.Repeat([]byte("plain text "), 10)
-	if allocs := testing.AllocsPerRun(100, func() { _, _ = appendJSONFields(dst, plain) }); allocs != 0 {
-		t.Errorf("rejecting a line allocates %v times per call, want 0", allocs)
 	}
 }

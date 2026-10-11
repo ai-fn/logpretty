@@ -28,8 +28,10 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      # the same command as `make test`; make is not guaranteed on the Windows runner
+      # the same commands as `make test`; make is not guaranteed on the Windows runner
       - run: go test -race -cover ./...
+      # under the race detector sync.Pool drops items, so the allocation checks that go through json.Valid are skipped in the step above
+      - run: go test ./...
 
   lint:
     runs-on: ubuntu-latest

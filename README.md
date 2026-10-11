@@ -82,7 +82,7 @@ on every pull request and every push to `main`.
 | Command | Description |
 |---|---|
 | `make build` | Build `bin/logpretty` |
-| `make test` | Run tests with the race detector and coverage |
+| `make test` | Run tests with the race detector and coverage, then without it |
 | `make lint` | Run golangci-lint (includes gofumpt formatting) |
 | `make check` | `test` + `lint`: run this before opening a pull request |
 | `make vuln` | Check dependencies and the standard library for known vulnerabilities |

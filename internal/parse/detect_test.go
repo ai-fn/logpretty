@@ -371,6 +371,9 @@ func TestParseDoesNotAllocate(t *testing.T) {
 	}
 
 	for _, line := range lines {
+		if raceEnabled && strings.Contains(line, "{") {
+			continue
+		}
 		b := []byte(line)
 		if allocs := testing.AllocsPerRun(100, func() { p.Parse(b) }); allocs != 0 {
 			t.Errorf("Parse allocates %v times for %q, want 0", allocs, line)
