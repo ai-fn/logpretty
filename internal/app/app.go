@@ -19,8 +19,8 @@ const ExitInterrupted = 130
 
 const writeBufferSize = 64 << 10
 
-// Run executes the CLI and returns the process exit code: 0 success, 1 read or write error,
-// 2 invalid arguments, ExitInterrupted when ctx is canceled before stdin ends.
+// Run executes the CLI and returns the process exit code: 0 success or stdout closed by its reader,
+// 1 read or write error, 2 invalid arguments, ExitInterrupted when ctx is canceled before stdin ends.
 func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("logpretty", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -50,7 +50,8 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 
 	select {
 	case err := <-done:
-		if err != nil {
+		// A closed stdout is how `logpretty | head` normally ends, so it is not reported.
+		if err != nil && !errors.Is(err, errStdoutClosed) {
 			_, _ = fmt.Fprintln(stderr, "logpretty:", err)
 			return 1
 		}
@@ -59,6 +60,18 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		p.stop()
 		return ExitInterrupted
 	}
+}
+
+var errStdoutClosed = errors.New("stdout is closed")
+
+// writeError wraps a failed write, or returns errStdoutClosed when the reader of stdout has gone away.
+func writeError(err error) error {
+	for _, closed := range closedPipeErrs {
+		if errors.Is(err, closed) {
+			return errStdoutClosed
+		}
+	}
+	return fmt.Errorf("write: %w", err)
 }
 
 // pipeline copies lines from r to w. mu is held while output may be unflushed and released only
@@ -98,7 +111,7 @@ func (p *pipeline) burst(line []byte, dropped int, readErr error) (done bool, er
 
 	for readErr == nil {
 		if err := render(p.w, line, dropped); err != nil {
-			return true, fmt.Errorf("write: %w", err)
+			return true, writeError(err)
 		}
 		if p.r.MayBlock() {
 			break
@@ -107,7 +120,7 @@ func (p *pipeline) burst(line []byte, dropped int, readErr error) (done bool, er
 	}
 
 	if err := p.w.Flush(); err != nil {
-		return true, fmt.Errorf("write: %w", err)
+		return true, writeError(err)
 	}
 	switch {
 	case readErr == nil:

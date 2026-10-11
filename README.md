@@ -40,6 +40,7 @@ kubectl logs -f pod | logpretty --level warn --where 'user_id=42' --fields msg,l
 | `-max-line N`: longest line to keep, in bytes (default 1 MiB) | Available |
 | Exit codes: `0` success, `1` read/write error, `2` invalid arguments, `130`/`143` on SIGINT/SIGTERM | Available |
 | Graceful stop: on SIGINT or SIGTERM the complete lines already read are written out before exit | Available |
+| Quiet exit when the reader of stdout leaves early, as in `logpretty \| head` | Available |
 | Per-line format detection: JSON, logfmt, plain text | Not yet |
 | Readable output with aligned level badges, timestamps and `key=value` fields | Not yet |
 | Colors: `--color=auto\|always\|never`, `NO_COLOR` support | Not yet |

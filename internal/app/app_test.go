@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"io/fs"
 	"math/rand/v2"
 	"runtime"
 	"strings"
@@ -334,3 +335,34 @@ func TestRunFinishesWriteInFlightBeforeStopping(t *testing.T) {
 		}
 	})
 }
+
+// When the reader of stdout goes away the stream has nowhere to go: that is not an error to report.
+func TestRunExitsQuietlyWhenStdoutIsClosed(t *testing.T) {
+	if len(closedPipeErrs) == 0 {
+		t.Fatal("no closed-pipe errors are defined for this platform")
+	}
+	inputs := map[string]string{
+		"write fails on flush":                      "a\nb\n",
+		"write fails while a long line is rendered": strings.Repeat("x", 2*writeBufferSize) + "\n",
+	}
+	for _, cause := range closedPipeErrs {
+		for name, in := range inputs {
+			t.Run(cause.Error()+"/"+name, func(t *testing.T) {
+				out := writerFunc(func([]byte) (int, error) {
+					return 0, &fs.PathError{Op: "write", Path: "/dev/stdout", Err: cause}
+				})
+				var stderr bytes.Buffer
+
+				code := Run(t.Context(), nil, strings.NewReader(in), out, &stderr)
+
+				if code != 0 || stderr.Len() != 0 {
+					t.Errorf("code = %d, stderr = %q; want 0 and nothing on stderr", code, stderr.String())
+				}
+			})
+		}
+	}
+}
+
+type writerFunc func([]byte) (int, error)
+
+func (f writerFunc) Write(p []byte) (int, error) { return f(p) }
