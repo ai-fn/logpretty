@@ -3,13 +3,16 @@ package app
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"math/rand/v2"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
 	"testing/iotest"
+	"testing/synctest"
 	"time"
 )
 
@@ -81,7 +84,7 @@ func TestRun(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
-			code := Run(tt.args, strings.NewReader(tt.in), &stdout, &stderr)
+			code := Run(t.Context(), tt.args, strings.NewReader(tt.in), &stdout, &stderr)
 
 			if code != tt.wantCode {
 				t.Errorf("exit code = %d, want %d (stderr: %q)", code, tt.wantCode, stderr.String())
@@ -103,7 +106,7 @@ func TestRunDefaultMaxLine(t *testing.T) {
 	const limit = 1 << 20
 	var stdout bytes.Buffer
 
-	code := Run(nil, strings.NewReader(strings.Repeat("x", limit+5)+"\nnext\n"), &stdout, io.Discard)
+	code := Run(t.Context(), nil, strings.NewReader(strings.Repeat("x", limit+5)+"\nnext\n"), &stdout, io.Discard)
 
 	want := strings.Repeat("x", limit) + "…[+5]\nnext\n"
 	if code != 0 || stdout.String() != want {
@@ -133,7 +136,7 @@ func TestRunMatchesCatOnLFText(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			var stdout bytes.Buffer
 
-			code := Run(nil, wrap(strings.NewReader(in.String())), &stdout, io.Discard)
+			code := Run(t.Context(), nil, wrap(strings.NewReader(in.String())), &stdout, io.Discard)
 
 			if code != 0 || stdout.String() != in.String() {
 				t.Errorf("code = %d, output differs from input (%d vs %d bytes)", code, stdout.Len(), in.Len())
@@ -206,7 +209,7 @@ func TestRunIOErrors(t *testing.T) {
 				out = &stdout
 			}
 
-			code := Run(nil, tt.in, out, &stderr)
+			code := Run(t.Context(), nil, tt.in, out, &stderr)
 
 			if code != 1 {
 				t.Errorf("exit code = %d, want 1", code)
@@ -228,7 +231,7 @@ func TestRunFlushesBeforeBlockingRead(t *testing.T) {
 	defer func() { _ = pw.Close() }()
 	out := &syncWriter{wrote: make(chan struct{}, 1)}
 	done := make(chan int, 1)
-	go func() { done <- Run(nil, pr, out, io.Discard) }()
+	go func() { done <- Run(t.Context(), nil, pr, out, io.Discard) }()
 	go func() { _, _ = pw.Write([]byte("a\nb")) }()
 
 	select {
@@ -249,4 +252,85 @@ func TestRunFlushesBeforeBlockingRead(t *testing.T) {
 	if got := out.String(); got != "a\nb\n" {
 		t.Errorf("final output = %q, want %q", got, "a\nb\n")
 	}
+}
+
+// gateWriter holds every write until release is closed, so a test can act while a write is in flight.
+type gateWriter struct {
+	out     syncWriter
+	release chan struct{}
+}
+
+func (w *gateWriter) Write(p []byte) (int, error) {
+	<-w.release
+	return w.out.Write(p)
+}
+
+func TestRunStopsWhenContextIsCanceled(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		pr, pw := io.Pipe()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		var out, stderr syncWriter
+		done := make(chan int, 1)
+		go func() { done <- Run(ctx, nil, pr, &out, &stderr) }()
+
+		if _, err := pw.Write([]byte("a\nb")); err != nil {
+			t.Fatal(err)
+		}
+		synctest.Wait() // Run is now blocked reading the rest of line "b"
+		cancel()
+
+		if code := <-done; code != ExitInterrupted {
+			t.Errorf("exit code = %d, want %d", code, ExitInterrupted)
+		}
+		if got := out.String(); got != "a\n" {
+			t.Errorf("output at exit = %q, want %q", got, "a\n")
+		}
+
+		// Input that arrives after the stop must not reach stdout.
+		if _, err := pw.Write([]byte("\nc\n")); err != nil {
+			t.Fatal(err)
+		}
+		if err := pw.Close(); err != nil {
+			t.Fatal(err)
+		}
+		synctest.Wait()
+		if got := out.String(); got != "a\n" {
+			t.Errorf("output after exit = %q, want it unchanged", got)
+		}
+		if got := stderr.String(); got != "" {
+			t.Errorf("stderr = %q, want empty", got)
+		}
+	})
+}
+
+// A cancellation that lands while lines are being written waits for them: no output is lost or torn.
+func TestRunFinishesWriteInFlightBeforeStopping(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		pr, pw := io.Pipe()
+		defer func() { _ = pw.Close() }()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		out := &gateWriter{release: make(chan struct{})}
+		done := make(chan int, 1)
+		go func() { done <- Run(ctx, nil, pr, out, io.Discard) }()
+
+		if _, err := pw.Write([]byte("a\nb\n")); err != nil {
+			t.Fatal(err)
+		}
+		synctest.Wait() // both lines are rendered and their write to stdout is held by the gate
+		if got := out.out.String(); got != "" {
+			t.Fatalf("output before release = %q, want empty", got)
+		}
+		cancel()
+		runtime.Gosched() // lets Run reach stop() while the write is still held; best effort, not a guarantee
+		close(out.release)
+
+		if code := <-done; code != ExitInterrupted {
+			t.Errorf("exit code = %d, want %d", code, ExitInterrupted)
+		}
+		if got := out.out.String(); got != "a\nb\n" {
+			t.Errorf("output at exit = %q, want %q", got, "a\nb\n")
+		}
+	})
 }

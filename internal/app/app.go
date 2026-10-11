@@ -3,20 +3,25 @@ package app
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"strconv"
+	"sync"
 
 	"github.com/ai-fn/logpretty/internal/linereader"
 )
 
+// ExitInterrupted is the exit code Run returns when ctx is canceled.
+const ExitInterrupted = 130
+
 const writeBufferSize = 64 << 10
 
-// Run executes the CLI and returns the process exit code: 0 success,
-// 1 read or write error, 2 invalid arguments.
-func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+// Run executes the CLI and returns the process exit code: 0 success, 1 read or write error,
+// 2 invalid arguments, ExitInterrupted when ctx is canceled before stdin ends.
+func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("logpretty", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	maxLine := fs.Int("max-line", linereader.DefaultMaxLine, "longest line to keep, in `bytes`; the rest of a longer line is dropped")
@@ -35,36 +40,82 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 2
 	}
 
-	if err := process(stdin, stdout, *maxLine); err != nil {
-		_, _ = fmt.Fprintln(stderr, "logpretty:", err)
-		return 1
+	p := &pipeline{
+		r: linereader.New(stdin, *maxLine),
+		w: bufio.NewWriterSize(stdout, writeBufferSize),
 	}
-	return 0
+	// A read from stdin cannot be interrupted, so the pipeline runs aside and is abandoned on cancel.
+	done := make(chan error, 1)
+	go func() { done <- p.run() }()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			_, _ = fmt.Fprintln(stderr, "logpretty:", err)
+			return 1
+		}
+		return 0
+	case <-ctx.Done():
+		p.stop()
+		return ExitInterrupted
+	}
 }
 
-func process(in io.Reader, out io.Writer, maxLine int) error {
-	r := linereader.New(in, maxLine)
-	w := bufio.NewWriterSize(out, writeBufferSize)
-	for {
-		line, dropped, err := r.Next()
-		if err != nil {
-			if ferr := w.Flush(); ferr != nil {
-				return fmt.Errorf("write: %w", ferr)
-			}
-			if errors.Is(err, io.EOF) {
-				return nil
-			}
-			return fmt.Errorf("read: %w", err)
-		}
+// pipeline copies lines from r to w. mu is held while output may be unflushed and released only
+// around a read that may block, so whoever takes it finds everything rendered so far flushed.
+type pipeline struct {
+	r *linereader.Reader
+	w *bufio.Writer
 
-		if err := render(w, line, dropped); err != nil {
-			return fmt.Errorf("write: %w", err)
+	mu      sync.Mutex
+	stopped bool
+}
+
+// stop waits for the lines being written and makes the pipeline write nothing more.
+func (p *pipeline) stop() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.stopped = true
+}
+
+func (p *pipeline) run() error {
+	for {
+		// Next is the only read that may block, and it runs before burst takes mu.
+		if done, err := p.burst(p.r.Next()); done {
+			return err
 		}
-		if r.MayBlock() {
-			if err := w.Flush(); err != nil {
-				return fmt.Errorf("write: %w", err)
-			}
+	}
+}
+
+// burst handles the result of Next and every complete line already buffered, then flushes.
+// It reports done when the stream has ended, failed or been stopped.
+func (p *pipeline) burst(line []byte, dropped int, readErr error) (done bool, err error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.stopped {
+		return true, nil
+	}
+
+	for readErr == nil {
+		if err := render(p.w, line, dropped); err != nil {
+			return true, fmt.Errorf("write: %w", err)
 		}
+		if p.r.MayBlock() {
+			break
+		}
+		line, dropped, readErr = p.r.Next() // a complete line or an error is pending: does not read
+	}
+
+	if err := p.w.Flush(); err != nil {
+		return true, fmt.Errorf("write: %w", err)
+	}
+	switch {
+	case readErr == nil:
+		return false, nil
+	case errors.Is(readErr, io.EOF):
+		return true, nil
+	default:
+		return true, fmt.Errorf("read: %w", readErr)
 	}
 }
 

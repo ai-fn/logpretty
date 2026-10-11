@@ -38,7 +38,8 @@ kubectl logs -f pod | logpretty --level warn --where 'user_id=42' --fields msg,l
 |---|---|
 | Stream stdin to stdout line by line, any line length (longer lines are truncated with an `…[+N]` marker and the stream keeps flowing) | Available |
 | `-max-line N`: longest line to keep, in bytes (default 1 MiB) | Available |
-| Exit codes: `0` success, `1` read/write error, `2` invalid arguments | Available |
+| Exit codes: `0` success, `1` read/write error, `2` invalid arguments, `130`/`143` on SIGINT/SIGTERM | Available |
+| Graceful stop: on SIGINT or SIGTERM the complete lines already read are written out before exit | Available |
 | Per-line format detection: JSON, logfmt, plain text | Not yet |
 | Readable output with aligned level badges, timestamps and `key=value` fields | Not yet |
 | Colors: `--color=auto\|always\|never`, `NO_COLOR` support | Not yet |
@@ -91,7 +92,7 @@ on every pull request and every push to `main`.
 ## Project structure
 
 ```
-cmd/logpretty/        # main() only calls app.Run
+cmd/logpretty/        # main() maps signals to a context and calls app.Run
 internal/app/         # flags and the read-to-write pipeline
 internal/linereader/  # reads lines of any length and truncates at a limit
 assets/               # logo
