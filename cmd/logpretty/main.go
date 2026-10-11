@@ -1,3 +1,4 @@
+// Command logpretty pretty-prints JSON, logfmt and plain-text logs read from stdin.
 package main
 
 import (

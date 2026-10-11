@@ -16,11 +16,14 @@ go install github.com/ai-fn/logpretty/cmd/logpretty@latest
 
 ## Development
 
-Requires Go 1.25+, [golangci-lint](https://golangci-lint.run) v2 and [gofumpt](https://github.com/mvdan/gofumpt).
+Requires Go 1.26+ and [golangci-lint](https://golangci-lint.run) v2 (it also enforces gofumpt formatting).
 
 ```bash
+make build  # build bin/logpretty
 make test   # tests with -race and coverage
 make lint   # golangci-lint
+make vuln   # govulncheck
+make help   # all targets
 ```
 
 ## License
