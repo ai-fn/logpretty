@@ -97,6 +97,7 @@ cmd/logpretty/        # main() maps signals to a context and calls app.Run
 internal/app/         # flags and the read-to-write pipeline
 internal/linereader/  # reads lines of any length and truncates at a limit
 internal/entry/       # parsed form of a log line: fields, level (not wired into the binary yet)
+internal/parse/       # tells JSON, logfmt and plain lines apart, finds time, level and message (not wired in yet)
 testdata/script/      # end-to-end scenarios run against the real binary (testscript)
 assets/               # logo
 .github/workflows/    # CI

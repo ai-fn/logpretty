@@ -440,3 +440,91 @@ func FuzzUnixTime(f *testing.F) {
 		}
 	})
 }
+
+// referenceFormat says what a line is and what stands in front of its fields, by the rules as they are
+// stated: JSON alone, JSON after a short timestamp or "name |", logfmt, and plain for the rest.
+func referenceFormat(t *testing.T, body []byte) (format entry.Format, prefix string) {
+	t.Helper()
+	if _, ok := referenceJSONFields(t, body); ok {
+		return entry.FormatJSON, ""
+	}
+	if i := bytes.IndexByte(body, '{'); i > 0 {
+		prefix = string(bytes.Trim(body[:i], logfmtSpace))
+		// What follows the last bar: a timestamp or nothing. Without a bar, the whole prefix.
+		_, afterBar, hasBar := strings.Cut(prefix, "|")
+		for hasBar && strings.Contains(afterBar, "|") {
+			_, afterBar, _ = strings.Cut(afterBar, "|")
+		}
+		stamp := prefix
+		if hasBar {
+			stamp = strings.TrimLeft(afterBar, logfmtSpace)
+		}
+		_, isTime := referenceDateTime(stamp, time.UTC)
+		collector := isTime || hasBar && stamp == ""
+		if _, ok := referenceJSONFields(t, body[i:]); ok && len(prefix) <= 64 && collector {
+			return entry.FormatJSON, prefix
+		}
+	}
+	if _, prefix, ok := referenceLogfmtFields(body); ok {
+		return entry.FormatLogfmt, prefix
+	}
+	return entry.FormatPlain, ""
+}
+
+func FuzzParse(f *testing.F) {
+	for _, seed := range []string{
+		`{"time":"2026-10-11T12:00:00Z","level":"warn","msg":"x","n":1}`, " \t{\"a\":1} \r", `{}`, `a=1 b="x y"`,
+		`2026/10/11 12:00:00 a=1 b=2`, `a=1 b=2}`, `{x} a=1 b={y}`, `hello world`, ``, " \t \r", `Starting server on port=8080`,
+		`2026-10-11T12:00:00.123456789Z {"a":1}`, `2026-10-11 12:00:00,123 {"a":1}`, `svc-1  | {"a":1}`, `  svc |{"a":1}  `,
+		strings.Repeat("s", 63) + `| {"a":1}`, strings.Repeat("s", 64) + `| {"a":1}`, `error: {"a":1}`, `2026-10-11 {"a":1}`,
+		`svc | out {"a":1}`, `2026-10-11T12:00:00Z {foo}`, `svc | {foo}`, `{"a":1} trailing`, `{"a":1} {"b":2}`, `{foo}`,
+		`{"a":1`, `{"a":1}}`, `done}`, `[{"a":1}]`, "\xef\xbb\xbf" + `{"a":1}`, "\xef\xbb\xbf" + `a=1 b=2`,
+		"\xef\xbb\xbf" + `svc | {"a":1}`, "\xef\xbb\xbf", `| {"a":1}`, `svc | ts=1791720000 lvl=dbg msg=x`, `a=1 b=2 {"c":3}`,
+		`svc-1  | 2026-10-11T12:00:00.123456789Z {"a":1}`, `svc-1 |2026-10-11 12:00:00 {"a":1}`, `a | b | {"a":1}`,
+		`svc | out 2026-10-11T12:00:00Z {"a":1}`, `svc | 2026-10-11T12:00:00Z INFO {"a":1}`, `[pod/web-1/app] {"a":1}`,
+	} {
+		f.Add([]byte(seed))
+	}
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		// Clipped, so that a read past the end panics instead of finding spare capacity.
+		line := slices.Clip(slices.Clone(data))
+		body := bytes.TrimPrefix(line, []byte("\xef\xbb\xbf"))
+		wantFormat, wantPrefix := referenceFormat(t, body)
+		// The parser has seen other lines: nothing of them may show in this one.
+		p := Parser{Loc: testLoc}
+		p.Parse([]byte(`svc | {"time":"2026-10-11T12:00:00Z","level":"error","msg":"boom","a":{"b":[1,2]},"c":3,"d":4}`))
+		p.Parse([]byte(`a=1 ` + strings.Repeat("word ", 20)))
+
+		e := p.Parse(line)
+
+		if e.Format != wantFormat || string(e.Prefix) != wantPrefix || (wantPrefix == "") != (e.Prefix == nil) {
+			t.Fatalf("Parse(%q): format %d with prefix %q (nil: %v), want format %d with prefix %q",
+				line, e.Format, e.Prefix, e.Prefix == nil, wantFormat, wantPrefix)
+		}
+		switch e.Format {
+		case entry.FormatJSON:
+			object := body[len(body)-len(bytes.TrimLeft(body, logfmtSpace)):]
+			if wantPrefix != "" {
+				object = body[bytes.IndexByte(body, '{'):]
+			}
+			if want, _ := appendJSONFields(nil, object); !slices.Equal(pairsOf(e.Fields), pairsOf(want)) {
+				t.Fatalf("Parse(%q)\n got %+v\nwant %+v", line, pairsOf(e.Fields), pairsOf(want))
+			}
+		case entry.FormatLogfmt:
+			if want, _, _ := referenceLogfmtFields(body); !slices.Equal(pairsOf(e.Fields), want) {
+				t.Fatalf("Parse(%q)\n got %+v\nwant %+v", line, pairsOf(e.Fields), want)
+			}
+		default:
+			if len(e.Fields) != 0 {
+				t.Fatalf("Parse(%q): a plain line has the fields %+v", line, pairsOf(e.Fields))
+			}
+		}
+		// The roles are those of the fields alone, whatever the parser held before.
+		fresh := entry.Entry{Fields: e.Fields}
+		assignRoles(&fresh, testLoc)
+		if got, want := rolesOf(t, e), rolesOf(t, &fresh); got != want {
+			t.Fatalf("Parse(%q): roles %+v, want %+v", line, got, want)
+		}
+	})
+}
