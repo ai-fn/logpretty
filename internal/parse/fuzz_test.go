@@ -3,7 +3,9 @@ package parse
 import (
 	"bytes"
 	"encoding/json"
+	"regexp"
 	"slices"
+	"strings"
 	"testing"
 	"unicode/utf8"
 
@@ -144,4 +146,203 @@ func kindOf(value string) entry.Kind {
 	default:
 		return entry.KindNumber
 	}
+}
+
+const (
+	logfmtSpace = " \t\n\r"
+	// A byte of invalid UTF-8 matches as U+FFFD, so the last range takes in every byte from 0x80 up.
+	logfmtKeyPattern = `[A-Za-z_@\x{80}-\x{10FFFF}][-.0-9A-Za-z_@\x{80}-\x{10FFFF}]*`
+)
+
+// The rules of logfmt.go stated apart from it, one expression per kind of token.
+var (
+	logfmtKey        = regexp.MustCompile(`^` + logfmtKeyPattern + `$`)
+	logfmtQuotedPair = regexp.MustCompile(`(?s)^(` + logfmtKeyPattern + `)="((?:[^"\\]|\\.)*)"`)
+	logfmtBarePair   = regexp.MustCompile(`^(` + logfmtKeyPattern + `)=([^ \t\n\r]*)`)
+	logfmtWord       = regexp.MustCompile(`^[^ \t\n\r]+`)
+)
+
+// refToken is a token as the reference sees it. One that is not a pair has only a key: its whole text.
+type refToken struct {
+	field      pair
+	start, end int
+}
+
+// referenceLogfmtTokens is the obvious implementation nextLogfmtToken must agree with.
+func referenceLogfmtTokens(line []byte) []refToken {
+	var toks []refToken
+	i := 0
+	for {
+		i = len(line) - len(bytes.TrimLeft(line[i:], logfmtSpace))
+		if i == len(line) {
+			return toks
+		}
+		rest := line[i:]
+		n, field := len(logfmtWord.Find(rest)), pair{}
+		switch quoted, bare := logfmtQuotedPair.FindSubmatch(rest), logfmtBarePair.FindSubmatch(rest); {
+		case quoted != nil:
+			n, field = len(quoted[0]), pair{string(quoted[1]), string(quoted[2]), entry.KindString, bytes.IndexByte(quoted[2], '\\') >= 0}
+		case bare != nil && bytes.HasPrefix(bare[2], []byte{'"'}):
+			n = len(bytes.TrimRight(rest, logfmtSpace)) // the quote is never closed: the rest of the line is one word
+		case bare != nil:
+			n, field = len(bare[0]), pair{string(bare[1]), string(bare[2]), entry.KindString, false}
+		}
+		if field.kind == entry.KindNone {
+			field.key = string(rest[:n])
+		}
+		toks = append(toks, refToken{field, i, i + n})
+		i += n
+	}
+}
+
+// referenceLogfmtFields is the obvious implementation appendLogfmtFields must agree with.
+func referenceLogfmtFields(line []byte) (fields []pair, prefix string, ok bool) {
+	toks := referenceLogfmtTokens(line)
+	first := slices.IndexFunc(toks, func(tok refToken) bool { return tok.field.kind == entry.KindString })
+	if first < 0 {
+		return nil, "", false
+	}
+	var pairs, pairBytes, otherBytes int
+	for _, tok := range toks[first:] {
+		if tok.field.kind == entry.KindString {
+			pairs++
+			pairBytes += tok.end - tok.start
+		} else {
+			otherBytes += tok.end - tok.start
+		}
+		fields = append(fields, tok.field)
+	}
+	if pairs < 2 || 10*pairBytes < 7*(pairBytes+otherBytes) {
+		return nil, "", false
+	}
+	if first > 0 {
+		prefix = string(line[toks[0].start:toks[first-1].end])
+	}
+	return fields, prefix, true
+}
+
+func FuzzLogfmt(f *testing.F) {
+	for _, seed := range []string{
+		``, " \t ", `k=v`, `k=`, `a= b=""`, `level=info msg="hello world" port=8080`, `k="a \"b\"" n=1`, `k="C:\\" n=1`,
+		`path=C:\dir k=a"b c`, `k="a"b`, `k==v q=a=b`, `a.b-c@d=1 _x=1 @timestamp=2`, "ключ=значение a=1\tb=2\r",
+		`http://x?a=1 =v 1a=2 -a=1 a:b=1 "k"=v`, `a=1 k="b c=2 d`, "k=\"b c \t", `k="abc\`, `a=1 bc=2 xyz`, `a=1 bc=2 wxyz`,
+		`svc | level=info ready msg=x`, "2026/10/11 12:00:00 level=info msg=x", "a=\xff \xfe=1 b=\"\xff\\\xff\"",
+		`k="a"b x=1`, "a=1\r\nb=2\r", "a=1\vb=2 c\fd", "a=1\u00a0b=2 \ufeffc=3", "p\x00=1 a=x\x00y b=2",
+		`took 5ms (retries=3, status=ok, code=5)`, "a=1 b=2 " + strings.Repeat("w", 41), `a=1 k="` + strings.Repeat("w ", 30),
+		// Read as key, value, key, value: what the round trip encodes.
+		"level\x00info\x00msg\x00hello world\x00port\x008080", "k\x00a \"b\"\x00path\x00C:\\dir\x00ключ\x00значение\x00e\x00",
+		"a\x00\"\x00b\x00\\\x00c\x00x=\"y\"\x00d\x00\xff\\n", "a\x001\x00b",
+	} {
+		f.Add([]byte(seed), uint8(0))
+		f.Add([]byte(seed), uint8(0xa5))
+	}
+
+	f.Fuzz(func(t *testing.T, data []byte, quoted uint8) {
+		checkLogfmtRoundTrip(t, data, quoted)
+		// A copy, because the check overwrites the line and must not touch the engine's data.
+		// Clipped, so that a read past the end panics instead of finding spare capacity.
+		checkLogfmtAgainstReference(t, slices.Clip(slices.Clone(data)))
+	})
+}
+
+// checkLogfmtAgainstReference compares the tokens and the fields of a line with the reference, then
+// overwrites the line to see that the fields are windows into it.
+func checkLogfmtAgainstReference(t *testing.T, line []byte) {
+	t.Helper()
+	wantToks := referenceLogfmtTokens(line)
+	gotToks := make([]refToken, 0, len(wantToks))
+	for tok, ok := nextLogfmtToken(line, 0); ok; tok, ok = nextLogfmtToken(line, tok.end) {
+		if tok.end <= tok.start {
+			t.Fatalf("%q: token [%d:%d) is empty, the next one would start at the same place", line, tok.start, tok.end)
+		}
+		field := pair{key: string(line[tok.start:tok.end])}
+		if tok.pair {
+			field = pair{string(line[tok.start:tok.keyEnd]), string(line[tok.valStart:tok.valEnd]), entry.KindString, tok.escaped}
+		}
+		gotToks = append(gotToks, refToken{field, tok.start, tok.end})
+	}
+	if !slices.Equal(gotToks, wantToks) {
+		t.Fatalf("tokens of %q\n got %+v\nwant %+v", line, gotToks, wantToks)
+	}
+
+	want, wantPrefix, wantOK := referenceLogfmtFields(line)
+
+	fields, prefix, ok := appendLogfmtFields(nil, line)
+
+	if ok != wantOK {
+		t.Fatalf("appendLogfmtFields(%q) accepted = %v, the reference says %v", line, ok, wantOK)
+	}
+	if !ok {
+		if len(fields) != 0 || prefix != nil {
+			t.Fatalf("appendLogfmtFields(%q) rejected the line but returned %d fields and the prefix %q", line, len(fields), prefix)
+		}
+		return
+	}
+	// No prefix is nil, not an empty window: callers may tell the two apart.
+	if got := pairsOf(fields); string(prefix) != wantPrefix || (wantPrefix == "") != (prefix == nil) || !slices.Equal(got, want) {
+		t.Fatalf("appendLogfmtFields(%q)\n got %q (nil: %v) %+v\nwant %q %+v", line, prefix, prefix == nil, got, wantPrefix, want)
+	}
+
+	for i := range line {
+		line[i] ^= 0xff
+	}
+	if !isFlipped(prefix, wantPrefix) {
+		t.Fatalf("%q: the prefix %q is not a clipped window into the line", line, wantPrefix)
+	}
+	for i, field := range fields {
+		if !isFlipped(field.Key, want[i].key) || !isFlipped(field.Value.Raw, want[i].raw) {
+			t.Fatalf("field %d (%q=%q) is not a pair of clipped windows into the line", i, want[i].key, want[i].raw)
+		}
+	}
+}
+
+// checkLogfmtRoundTrip reads data as NUL-separated keys and values in turn, writes them as a logfmt line
+// and expects the same pairs back.
+func checkLogfmtRoundTrip(t *testing.T, data []byte, quoted uint8) {
+	t.Helper()
+	parts := bytes.Split(data, []byte{0})
+	n := len(parts) / 2
+	if n < minLogfmtPairs {
+		return
+	}
+	var line []byte
+	for i := range n {
+		key, value := parts[2*i], parts[2*i+1]
+		if !logfmtKey.Match(key) {
+			return
+		}
+		if i > 0 {
+			line = append(line, ' ')
+		}
+		line = appendLogfmtPair(line, key, value, quoted>>(i%8)&1 == 1)
+	}
+	line = slices.Clip(line)
+
+	fields, prefix, ok := appendLogfmtFields(nil, line)
+
+	if !ok || len(prefix) != 0 || len(fields) != n {
+		t.Fatalf("appendLogfmtFields(%q): ok = %v, prefix %q, %d fields; want the %d encoded pairs", line, ok, prefix, len(fields), n)
+	}
+	for i, field := range fields {
+		key, value := parts[2*i], parts[2*i+1]
+		if got := field.Value.AppendText(nil); !bytes.Equal(field.Key, key) || field.Value.Kind != entry.KindString || !bytes.Equal(got, value) {
+			t.Fatalf("appendLogfmtFields(%q): pair %d = %q=%q (kind %d), want %q=%q", line, i, field.Key, got, field.Value.Kind, key, value)
+		}
+	}
+}
+
+// appendLogfmtPair writes key=value, quoting the value when it would not survive bare or when quote is set.
+func appendLogfmtPair(dst, key, value []byte, quote bool) []byte {
+	dst = append(append(dst, key...), '=')
+	if !quote && !bytes.ContainsAny(value, logfmtSpace) && !bytes.HasPrefix(value, []byte{'"'}) {
+		return append(dst, value...)
+	}
+	dst = append(dst, '"')
+	for _, c := range value {
+		if c == '"' || c == '\\' {
+			dst = append(dst, '\\')
+		}
+		dst = append(dst, c)
+	}
+	return append(dst, '"')
 }

@@ -59,7 +59,7 @@ func jsonValue(b []byte, i int) (entry.Value, int) {
 		kind = entry.KindNull
 	}
 	end := i
-	for !isJSONSpace(b[end]) && b[end] != ',' && b[end] != '}' {
+	for !isSpace(b[end]) && b[end] != ',' && b[end] != '}' {
 		end++
 	}
 	return entry.Value{Raw: b[i:end:end], Kind: kind}, end
@@ -99,7 +99,7 @@ func compositeEnd(b []byte, i int) int {
 }
 
 func skipJSONSpace(b []byte, i int) int {
-	for isJSONSpace(b[i]) {
+	for isSpace(b[i]) {
 		i++
 	}
 	return i
@@ -108,12 +108,13 @@ func skipJSONSpace(b []byte, i int) int {
 // trimLeftJSONSpace drops only what JSON calls whitespace: bytes.TrimSpace would also drop Unicode
 // spaces that encoding/json rejects.
 func trimLeftJSONSpace(b []byte) []byte {
-	for len(b) > 0 && isJSONSpace(b[0]) {
+	for len(b) > 0 && isSpace(b[0]) {
 		b = b[1:]
 	}
 	return b
 }
 
-func isJSONSpace(c byte) bool {
+// isSpace reports the four bytes JSON calls whitespace. logfmt tokens are split on the same ones.
+func isSpace(c byte) bool {
 	return c == ' ' || c == '\t' || c == '\n' || c == '\r'
 }
