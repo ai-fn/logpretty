@@ -8,8 +8,8 @@ import (
 
 // Keys that name each role, the most trusted first: "msg" wins over "event" wherever it stands in the line.
 var (
-	timeKeys  = [...]string{"time", "timestamp", "@timestamp", "ts", "@t", "t"}
-	levelKeys = [...]string{"level", "lvl", "severity", "log.level", "@l"}
+	timeKeys  = [...]string{"time", "timestamp", "@timestamp", "asctime", "ts", "@t", "t"}
+	levelKeys = [...]string{"level", "lvl", "severity", "log.level", "levelname", "log_level", "loglevel", "@l"}
 	msgKeys   = [...]string{"msg", "message", "@message", "@m", "event", "@mt"}
 )
 
@@ -109,7 +109,7 @@ func parseTime(v entry.Value, loc *time.Location) (time.Time, bool) {
 }
 
 // parseDateTime reads "2006-01-02T15:04:05", with "T" or a space, an optional fraction and an optional zone,
-// as time.Parse would. It is here because time.Parse allocates: a string, and a Location for an offset.
+// which may follow a space, as time.Parse would. It is here because time.Parse allocates: a string, and a Location.
 func parseDateTime(b []byte, loc *time.Location) (time.Time, bool) {
 	if len(b) < 19 || b[4] != '-' || b[7] != '-' || (b[10] != 'T' && b[10] != ' ') || b[13] != ':' || b[16] != ':' {
 		return time.Time{}, false
@@ -138,6 +138,10 @@ func parseDateTime(b []byte, loc *time.Location) (time.Time, bool) {
 			loc = time.Local
 		}
 		return time.Date(year, time.Month(month), day, hour, minute, sec, nsec, loc), true
+	}
+	// Ruby's Time#to_s writes a space before a numeric offset; "Z" never gets one.
+	if len(rest) > 1 && rest[0] == ' ' && (rest[1] == '+' || rest[1] == '-') {
+		rest = rest[1:]
 	}
 	offset, ok := zoneOffset(rest)
 	if !ok {

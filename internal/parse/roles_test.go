@@ -145,6 +145,21 @@ func TestAssignRoles(t *testing.T) {
 			want: roles{"2026-10-11T12:00:00Z", entry.LevelError, "t", "lvl", "msg"},
 		},
 		{
+			name: "python-json-logger",
+			line: `{"asctime": "2026-10-11 12:00:00,123", "levelname": "INFO", "name": "app", "message": "started"}`,
+			want: roles{"2026-10-11T09:00:00.123Z", entry.LevelInfo, "asctime", "levelname", "message"},
+		},
+		{
+			name: ".NET console JSON",
+			line: `{"Timestamp":"2026-10-11T12:00:00.123Z","EventId":0,"LogLevel":"Information","Category":"Program","Message":"Started"}`,
+			want: roles{"2026-10-11T12:00:00.123Z", entry.LevelInfo, "Timestamp", "LogLevel", "Message"},
+		},
+		{
+			name: "Ruby time with a space before the offset",
+			line: `{"timestamp":"2026-10-11 12:00:00 +0000","level":"info","msg":"x"}`,
+			want: roles{"2026-10-11T12:00:00Z", entry.LevelInfo, "timestamp", "level", "msg"},
+		},
+		{
 			name: "keys in another letter case",
 			line: `{"Timestamp":"2026-10-11T12:00:00Z","Level":"Information","MESSAGE":"Started"}`,
 			want: roles{"2026-10-11T12:00:00Z", entry.LevelInfo, "Timestamp", "Level", "MESSAGE"},
@@ -214,8 +229,8 @@ func TestAssignRolesPriority(t *testing.T) {
 		value string
 		field func(*entry.Entry) int
 	}{
-		{"time", []string{"time", "timestamp", "@timestamp", "ts", "@t", "t"}, "2026-10-11T12:00:00Z", (*entry.Entry).TimeField},
-		{"level", []string{"level", "lvl", "severity", "log.level", "@l"}, "info", (*entry.Entry).LevelField},
+		{"time", []string{"time", "timestamp", "@timestamp", "asctime", "ts", "@t", "t"}, "2026-10-11T12:00:00Z", (*entry.Entry).TimeField},
+		{"level", []string{"level", "lvl", "severity", "log.level", "levelname", "log_level", "loglevel", "@l"}, "info", (*entry.Entry).LevelField},
 		{"message", []string{"msg", "message", "@message", "@m", "event", "@mt"}, "x", (*entry.Entry).MsgField},
 	}
 
@@ -307,6 +322,10 @@ func TestParseTime(t *testing.T) {
 		{"space between date and time", str("2026-10-11 12:00:00Z"), "2026-10-11T12:00:00Z"},
 		{"no zone", str("2026-10-11T12:00:00"), "2026-10-11T09:00:00Z"},
 		{"space and no zone", str("2026-10-11 12:00:00"), "2026-10-11T09:00:00Z"},
+		{"space before the offset", str("2026-10-11 12:00:00 +0000"), "2026-10-11T12:00:00Z"},
+		{"space before an offset east with a colon", str("2026-10-11 12:00:00 +03:00"), "2026-10-11T09:00:00Z"},
+		{"space before an offset west in hours", str("2026-10-11T12:00:00 -08"), "2026-10-11T20:00:00Z"},
+		{"fraction and a space before the offset", str("2026-10-11 12:00:00.5 +0530"), "2026-10-11T06:30:00.5Z"},
 		{"space, comma and no zone", str("2026-10-11 12:00:00,123"), "2026-10-11T09:00:00.123Z"},
 		{"leap day", str("2028-02-29T00:00:00Z"), "2028-02-29T00:00:00Z"},
 		{"last day of a 30-day month", str("2026-04-30T00:00:00Z"), "2026-04-30T00:00:00Z"},
@@ -366,6 +385,10 @@ func TestParseTimeRejects(t *testing.T) {
 		{"two spaces between date and time", "2026-10-11  12:00:00"},
 		{"two spaces and one digit of hour", "2026-10-11  9:00:00"},
 		{"lower-case t", "2026-10-11t12:00:00Z"},
+		{"two spaces before the offset", "2026-10-11 12:00:00  +0000"},
+		{"a space before Z", "2026-10-11T12:00:00 Z"},
+		{"a space and nothing after it", "2026-10-11T12:00:00 "},
+		{"a zone name after the offset", "2026-10-11 12:00:00 +0000 UTC"},
 		{"lower-case z", "2026-10-11T12:00:00z"},
 		{"slash after the year", "2026/10-11T12:00:00Z"},
 		{"slash after the month", "2026-10/11T12:00:00Z"},

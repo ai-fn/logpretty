@@ -352,11 +352,11 @@ func appendLogfmtPair(dst, key, value []byte, quote bool) []byte {
 // referenceDateTime is the obvious implementation parseDateTime must agree with: time.Parse over every layout.
 func referenceDateTime(s string, loc *time.Location) (time.Time, bool) {
 	// time.Parse also takes a run of spaces for one and an hour of one digit, which no logger writes.
-	if len(s) < 13 || !isDigit(s[11]) || !isDigit(s[12]) {
+	if len(s) < 13 || !isDigit(s[11]) || !isDigit(s[12]) || strings.Contains(s, "  ") {
 		return time.Time{}, false
 	}
 	for _, sep := range []string{"T", " "} {
-		for _, zone := range []string{"", "Z07:00", "Z0700", "Z07"} {
+		for _, zone := range []string{"", "Z07:00", "Z0700", "Z07", " -07:00", " -0700", " -07"} {
 			if t, err := time.ParseInLocation("2006-01-02"+sep+"15:04:05"+zone, s, loc); err == nil {
 				// The parsed time keeps the zone it was written in, so this is the year as written.
 				return t, 2000 <= t.Year() && t.Year() <= 2099
@@ -375,7 +375,8 @@ func FuzzDateTime(f *testing.F) {
 		"2026-10-11T24:00:00Z", "2026-10-11T12:60:00Z", "2026-10-11T12:00:60Z", "2026-10-11T12:00:00.Z",
 		"2026-10-11T12:00:00+25:00", "2026-10-11T12:00:00+00:61", "2026-10-11T12:00:00+3", "2026-10-11T12:00:00 UTC",
 		"2026-10-11t12:00:00z", "2026-10-11", "1791720000", "", "2000-10-01 0:00:00", "2000-10-01  0:00:00",
-		"2000-10-01  00:00:00",
+		"2000-10-01  00:00:00", "2026-10-11 12:00:00 +0000", "2026-10-11 12:00:00 -07:00", "2026-10-11T12:00:00  +0000",
+		"2026-10-11 12:00:00 Z", "2026-10-11 12:00:00 +0000 UTC",
 	} {
 		f.Add(seed)
 	}

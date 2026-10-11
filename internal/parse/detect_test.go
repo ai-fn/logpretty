@@ -72,6 +72,20 @@ func TestParse(t *testing.T) {
 			want:       []pair{num("a", "1")},
 		},
 		{
+			name:       "JSON after a timestamp with a space before its offset",
+			line:       `2026-10-11 12:00:00 +0000 {"a":1}`,
+			format:     entry.FormatJSON,
+			wantPrefix: `2026-10-11 12:00:00 +0000`,
+			want:       []pair{num("a", "1")},
+		},
+		{
+			name:       "JSON after a container name and a timestamp with a space before its offset",
+			line:       `web | 2026-10-11 12:00:00 +0300 {"a":1}`,
+			format:     entry.FormatJSON,
+			wantPrefix: `web | 2026-10-11 12:00:00 +0300`,
+			want:       []pair{num("a", "1")},
+		},
+		{
 			name:       "JSON after a timestamp with a space in it",
 			line:       `2026-10-11 12:00:00,123 {"a":1}`,
 			format:     entry.FormatJSON,
