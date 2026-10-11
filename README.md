@@ -75,7 +75,7 @@ $ printf '0123456789\n' | logpretty -max-line 4
 ## Development
 
 Requires Go 1.26+, [golangci-lint](https://golangci-lint.run) v2 and `make`. CI runs the tests
-on Linux and macOS, golangci-lint, `go mod tidy` and [govulncheck](https://go.dev/doc/security/vuln/)
+on Linux, macOS and Windows, golangci-lint, `go mod tidy` and [govulncheck](https://go.dev/doc/security/vuln/)
 on every pull request and every push to `main`.
 
 | Command | Description |
