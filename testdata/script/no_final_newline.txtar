@@ -1,0 +1,11 @@
+# A last line without a newline is printed with one.
+[!exec:printf] skip 'needs printf'
+exec printf 'first\nlast'
+stdin stdout
+exec logpretty
+cmp stdout want
+! stderr .
+
+-- want --
+first
+last

@@ -1,0 +1,12 @@
+# Lines of every format pass through unchanged.
+stdin input.log
+exec logpretty
+cmp stdout input.log
+! stderr .
+
+-- input.log --
+{"level":"info","msg":"started","port":8080}
+level=warn msg="slow request" latency=1.2s
+plain text line
+
+  indented, after a blank line

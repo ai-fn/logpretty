@@ -1,0 +1,12 @@
+# A line longer than -max-line is cut and marked with the dropped byte count; the stream goes on.
+stdin input.log
+exec logpretty -max-line 4
+cmp stdout want
+! stderr .
+
+-- input.log --
+0123456789
+ok
+-- want --
+0123…[+6]
+ok

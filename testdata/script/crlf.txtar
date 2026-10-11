@@ -1,0 +1,11 @@
+# CRLF line endings become LF.
+[!exec:printf] skip 'needs printf'
+exec printf 'one\r\ntwo\r\n'
+stdin stdout
+exec logpretty
+cmp stdout want
+! stderr .
+
+-- want --
+one
+two

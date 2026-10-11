@@ -1,0 +1,7 @@
+# Empty input succeeds and prints nothing.
+stdin empty
+exec logpretty
+! stdout .
+! stderr .
+
+-- empty --

@@ -1,0 +1,18 @@
+# Invalid arguments fail with a message on stderr and print nothing to stdout.
+! exec logpretty -nope
+stderr 'flag provided but not defined: -nope'
+! stdout .
+
+! exec logpretty file.log
+stderr 'unexpected argument "file.log"'
+! stdout .
+
+! exec logpretty -max-line 0
+stderr '-max-line must be positive'
+! stdout .
+
+# -h prints the usage to stderr and succeeds.
+exec logpretty -h
+stderr 'Usage of logpretty'
+stderr '-max-line'
+! stdout .
