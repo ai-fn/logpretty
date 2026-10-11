@@ -96,6 +96,7 @@ on every pull request and every push to `main`.
 cmd/logpretty/        # main() maps signals to a context and calls app.Run
 internal/app/         # flags and the read-to-write pipeline
 internal/linereader/  # reads lines of any length and truncates at a limit
+internal/entry/       # parsed form of a log line: fields, level (not wired into the binary yet)
 testdata/script/      # end-to-end scenarios run against the real binary (testscript)
 assets/               # logo
 .github/workflows/    # CI
