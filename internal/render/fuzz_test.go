@@ -2,12 +2,15 @@ package render
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
 	"testing"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/ai-fn/logpretty/internal/entry"
 )
 
 // referenceSafe is the obvious implementation appendSafe must agree with: one rune at a time, through fmt.
@@ -78,5 +81,83 @@ func FuzzAppendSafe(f *testing.F) {
 		if clean := utf8.Valid(src) && !strings.ContainsFunc(string(src), needsEscape); clean && !bytes.Equal(out, src) {
 			t.Fatalf("appendSafe(%q) = %q, want a clean text back as it was", src, out)
 		}
+	})
+}
+
+// referenceQuoted is the rule for a key or a value stated apart from the code: in quotes when empty or when
+// it holds one of the characters in special, with \" for a quote, and written safely either way.
+func referenceQuoted(text, special string) string {
+	safe := referenceSafe(text)
+	if text == "" || strings.ContainsAny(text, special) {
+		return `"` + strings.ReplaceAll(safe, `"`, `\"`) + `"`
+	}
+	return safe
+}
+
+// checkShown compares what was written with the rule and checks that nothing in it can reach the terminal.
+func checkShown(t *testing.T, what, got, text, special string) {
+	t.Helper()
+	if want := referenceQuoted(text, special); got != want {
+		t.Fatalf("%s %q\n got %q\nwant %q", what, text, got, want)
+	}
+	checkNothingUnsafe(t, what, text, got)
+}
+
+// checkNothingUnsafe checks that what was shown is valid UTF-8 and holds no rune the terminal acts on.
+func checkNothingUnsafe(t *testing.T, what, text, got string) {
+	t.Helper()
+	if !utf8.ValidString(got) {
+		t.Fatalf("%s %q is shown as %q, which is not valid UTF-8", what, text, got)
+	}
+	for _, r := range got {
+		if unsafeRune(r) {
+			t.Fatalf("%s %q is shown as %q, which holds %U", what, text, got, r)
+		}
+	}
+}
+
+func FuzzFormat(f *testing.F) {
+	for _, seed := range []string{
+		"", "a", "a b", `say "hi"`, "k=v", "a\tb", "\xff", "\x1b[31m", `a\nb`, `\u202e`, `\ud83d\ude80`, `C:\my dir`, `"`,
+		`{"a":1}`, `[ 1 , {"b" : "c d"} ]`, `{"a":"\u001b[0m"}`, `{ "a" : "x\\" , "b" : 1 }`, "{\"a\":\"x\x7f\xff\"}", `[ ]`, `{"a":"x\`, `[ "x`, `}{`, `\`,
+	} {
+		f.Add([]byte(seed))
+	}
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		// Clipped, so that a read past the end panics instead of finding spare capacity.
+		raw := slices.Clip(slices.Clone(data))
+		var fm formatter
+
+		// The text as written in a logfmt value, and as the escapes of a JSON string would decode.
+		for _, escaped := range []bool{false, true} {
+			v := entry.Value{Raw: raw, Kind: entry.KindString, Escaped: escaped}
+			checkShown(t, "value", string(fm.appendValue(nil, v)), string(v.AppendText(nil)), " \t\"")
+		}
+		checkShown(t, "key", string(appendKey(nil, raw)), string(raw), " \t\"=")
+
+		// Whatever the bytes are, as an object or an array: no panic, nothing unsafe in the output.
+		for _, kind := range []entry.Kind{entry.KindObject, entry.KindArray} {
+			checkNothingUnsafe(t, "composite", string(raw), string(fm.appendValue(nil, entry.Value{Raw: raw, Kind: kind})))
+		}
+
+		// A JSON object or array comes out as the compact form of the same JSON.
+		object := bytes.Trim(raw, " \t\r\n")
+		if len(object) == 0 || object[0] != '{' && object[0] != '[' || !json.Valid(object) {
+			return
+		}
+		var compact bytes.Buffer
+		if err := json.Compact(&compact, object); err != nil {
+			t.Fatalf("json.Compact(%q): %v", object, err)
+		}
+		kind := entry.KindObject
+		if object[0] == '[' {
+			kind = entry.KindArray
+		}
+		got := string(fm.appendValue(nil, entry.Value{Raw: object, Kind: kind}))
+		if want := referenceSafe(compact.String()); got != want {
+			t.Fatalf("JSON %q\n got %q\nwant %q", object, got, want)
+		}
+		checkNothingUnsafe(t, "JSON", string(object), got)
 	})
 }
