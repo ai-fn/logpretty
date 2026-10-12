@@ -29,7 +29,9 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	cfg, err := cli.Parse(args)
 	switch {
 	case errors.Is(err, cli.ErrHelp):
-		return writeHelp(stdout, stderr)
+		return writeInfo(stdout, stderr, cli.Usage)
+	case errors.Is(err, cli.ErrVersion):
+		return writeInfo(stdout, stderr, cli.Version()+"\n")
 	case err != nil:
 		cli.WriteError(stderr, err)
 		return 2
@@ -65,9 +67,9 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	}
 }
 
-// writeHelp prints the help; its reader may leave early too, as in `logpretty --help | head`.
-func writeHelp(stdout, stderr io.Writer) int {
-	if _, werr := io.WriteString(stdout, cli.Usage); werr != nil {
+// writeInfo prints the help or the version; its reader may leave early too, as in `logpretty --help | head`.
+func writeInfo(stdout, stderr io.Writer, text string) int {
+	if _, werr := io.WriteString(stdout, text); werr != nil {
 		if err := writeError(werr); !errors.Is(err, errStdoutClosed) {
 			_, _ = fmt.Fprintln(stderr, "logpretty:", err)
 			return 1

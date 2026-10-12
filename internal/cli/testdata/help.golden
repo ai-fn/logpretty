@@ -9,6 +9,7 @@ Flags:
       --utc          show times in UTC instead of the local time zone
       --max-line N   longest line to keep, in bytes (default 1048576); the rest
                      of a longer line is dropped
+      --version      print the version
   -h, --help         print this help
 
 Examples:

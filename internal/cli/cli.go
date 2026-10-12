@@ -34,6 +34,7 @@ Flags:
       --utc          show times in UTC instead of the local time zone
       --max-line N   longest line to keep, in bytes (default 1048576); the rest
                      of a longer line is dropped
+      --version      print the version
   -h, --help         print this help
 
 Examples:
@@ -44,33 +45,43 @@ Examples:
 
 // Parse reads the arguments that follow the name of the program. The Config is zero unless the error is nil.
 func Parse(args []string) (Config, error) {
-	cfg := Config{MaxLine: linereader.DefaultMaxLine}
-	fs := newFlagSet(&cfg)
+	f := flags{Config: Config{MaxLine: linereader.DefaultMaxLine}}
+	fs := newFlagSet(&f)
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return Config{}, ErrHelp
 		}
 		return Config{}, err
 	}
+	if f.version {
+		return Config{}, ErrVersion
+	}
 	if fs.NArg() > 0 {
 		return Config{}, fmt.Errorf("unexpected argument %q", fs.Arg(0))
 	}
-	if cfg.MaxLine <= 0 {
+	if f.MaxLine <= 0 {
 		return Config{}, errors.New("--max-line must be positive")
 	}
-	return cfg, nil
+	return f.Config, nil
 }
 
-// newFlagSet defines the flags, which write into cfg. The set prints nothing: Parse returns what went wrong.
-func newFlagSet(cfg *Config) *flag.FlagSet {
+// flags is what the flag set writes into: the Config and the requests that are not a part of it.
+type flags struct {
+	Config
+	version bool
+}
+
+// newFlagSet defines the flags, which write into f. The set prints nothing: Parse returns what went wrong.
+func newFlagSet(f *flags) *flag.FlagSet {
 	fs := flag.NewFlagSet("logpretty", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	fs.IntVar(&cfg.MaxLine, "max-line", cfg.MaxLine, "")
-	fs.BoolVar(&cfg.UTC, "utc", cfg.UTC, "")
+	fs.IntVar(&f.MaxLine, "max-line", f.MaxLine, "")
+	fs.BoolVar(&f.UTC, "utc", f.UTC, "")
 	fs.Func("color", "", func(s string) (err error) {
-		cfg.Color, err = term.ParseColorMode(s)
+		f.Color, err = term.ParseColorMode(s)
 		return err
 	})
+	fs.BoolVar(&f.version, "version", false, "")
 	return fs
 }
 

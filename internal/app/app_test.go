@@ -166,29 +166,42 @@ func TestRunArgumentErrors(t *testing.T) {
 	}
 }
 
-func TestRunHelp(t *testing.T) {
-	for _, arg := range []string{"-h", "--help"} {
-		var stdout, stderr bytes.Buffer
+// The help and the version are all that is asked for: the input is not read.
+func TestRunInfo(t *testing.T) {
+	tests := []struct {
+		arg  string
+		want string
+	}{
+		{arg: "-h", want: cli.Usage},
+		{arg: "--help", want: cli.Usage},
+		{arg: "--version", want: cli.Version() + "\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.arg, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
 
-		code := Run(t.Context(), []string{arg}, iotest.ErrReader(errors.New("boom")), &stdout, &stderr)
+			code := Run(t.Context(), []string{tt.arg}, iotest.ErrReader(errors.New("boom")), &stdout, &stderr)
 
-		if code != 0 || stdout.String() != cli.Usage || stderr.Len() != 0 {
-			t.Errorf("Run(%s): code = %d, stdout = %q, stderr = %q; want 0, the help and nothing on stderr", arg, code, stdout.String(), stderr.String())
-		}
+			if code != 0 || stdout.String() != tt.want || stderr.Len() != 0 {
+				t.Errorf("code = %d, stdout = %q, stderr = %q; want 0, %q and nothing on stderr", code, stdout.String(), stderr.String(), tt.want)
+			}
+		})
 	}
 }
 
-func TestRunHelpWriteErrors(t *testing.T) {
-	var stderr bytes.Buffer
-	if code := Run(t.Context(), []string{"--help"}, strings.NewReader(""), failWriter{}, &stderr); code != 1 || !strings.Contains(stderr.String(), "write:") {
-		t.Errorf("help into a failing stdout: code = %d, stderr = %q; want 1 and a write error", code, stderr.String())
-	}
+func TestRunInfoWriteErrors(t *testing.T) {
+	for _, arg := range []string{"--help", "--version"} {
+		var stderr bytes.Buffer
+		if code := Run(t.Context(), []string{arg}, strings.NewReader(""), failWriter{}, &stderr); code != 1 || !strings.Contains(stderr.String(), "write:") {
+			t.Errorf("%s into a failing stdout: code = %d, stderr = %q; want 1 and a write error", arg, code, stderr.String())
+		}
 
-	for _, cause := range closedPipeErrs {
-		stderr.Reset()
-		out := writerFunc(func([]byte) (int, error) { return 0, cause })
-		if code := Run(t.Context(), []string{"--help"}, strings.NewReader(""), out, &stderr); code != 0 || stderr.Len() != 0 {
-			t.Errorf("help into a closed stdout (%v): code = %d, stderr = %q; want 0 and nothing", cause, code, stderr.String())
+		for _, cause := range closedPipeErrs {
+			stderr.Reset()
+			out := writerFunc(func([]byte) (int, error) { return 0, cause })
+			if code := Run(t.Context(), []string{arg}, strings.NewReader(""), out, &stderr); code != 0 || stderr.Len() != 0 {
+				t.Errorf("%s into a closed stdout (%v): code = %d, stderr = %q; want 0 and nothing", arg, cause, code, stderr.String())
+			}
 		}
 	}
 }

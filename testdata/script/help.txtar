@@ -4,6 +4,7 @@ stdout '^Usage: logpretty \[flags\] < input$'
 stdout '^      --color WHEN '
 stdout '^      --utc '
 stdout '^      --max-line N '
+stdout '^      --version '
 stdout '^  -h, --help '
 stdout '^Examples:$'
 ! stderr .

@@ -107,6 +107,7 @@ kubectl logs -f pod | logpretty --color=always | less -R
 | `--color WHEN` | When to color the output: `auto` (on a terminal, the default), `always` or `never`. `always` also beats `NO_COLOR` |
 | `--utc` | Show times in UTC instead of the local time zone |
 | `--max-line N` | Longest line to keep, in bytes (default 1 MiB) |
+| `--version` | Print the version |
 | `-h`, `--help` | Print the help with examples |
 
 A flag may also be written with one dash, as in `-utc`.

@@ -1,0 +1,11 @@
+# --version prints the name and the version to stdout and succeeds, without reading the input.
+exec logpretty --version
+stdout '^logpretty [^ ]+$'
+! stderr .
+
+stdin input.log
+exec logpretty --version
+! stdout hello
+
+-- input.log --
+{"msg":"hello"}

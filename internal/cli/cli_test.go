@@ -134,9 +134,8 @@ func TestUsage(t *testing.T) {
 }
 
 func TestUsageNamesEveryFlag(t *testing.T) {
-	var cfg Config
 	seen := 0
-	newFlagSet(&cfg).VisitAll(func(f *flag.Flag) {
+	newFlagSet(new(flags)).VisitAll(func(f *flag.Flag) {
 		seen++
 		// The column of the flags, not a mention inside a description.
 		if !regexp.MustCompile(`(?m)^      --` + regexp.QuoteMeta(f.Name) + `( |$)`).MatchString(Usage) {
