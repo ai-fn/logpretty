@@ -1,0 +1,5 @@
+12:00:00.000 INFO  hello
+12:00:00.000 ERROR failed  error=boom
+09:00:00.123 DEBUG cache miss  service=api caller=main.go:10
+12:00:00.123 WARN  timestamps in milliseconds
+12:00PM INF server started port=8080

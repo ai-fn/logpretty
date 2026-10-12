@@ -1,0 +1,4 @@
+12:00:00.123 INFO  Started  EventId=0 Category=Program State={"Message":"Started","{OriginalFormat}":"Started"}
+12:00:01.123 ERROR Failed  EventId=7 Category=Program Exception="System.Exception: boom"
+info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://localhost:5000

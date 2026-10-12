@@ -1,0 +1,15 @@
+12:00:00.123 INFO  request done  method=GET path=/api/v1/users status=200 latency=12ms
+12:00:01.000 WARN  slow query  query="SELECT * FROM users WHERE name = \"bob\"" rows=0 cached=false plan=null
+12:00:02.000 ERROR upstream failed  http={"method":"POST","url":"https://example.com/a b","headers":{"accept":"*/*"}} retries=[1,2,3] err="dial tcp 10.0.0.1:5432: connect: connection refused"
+DEBUG cache miss  key=user:42 empty="" "user id"=5 "a=b"=1
+only a message
+FATAL
+a=1 b="two words" c=[] d={}
+{}
+12:00:03.000 INFO  multi\nline	message with \x1b[31mcolor\x1b[0m  path="C:\Program Files\app" note="привет мир"
+12:00:04.000 INFO  logfmt line  verbose retries=3 empty="" path=/tmp/x
+
+TRACE x
+a=1 b=2
+plain line that stays as it is
+	indented with a tab

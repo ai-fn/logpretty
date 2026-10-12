@@ -1,0 +1,5 @@
+12:00:00.123 version=1.1 host=web-1 short_message="gelf message" level=6
+12:00:00.000 WARN  underscore key
+12:00:01.000 WARN  joined key
+INFO  go time.Time.String  time="2026-10-11 12:00:03 +0000 UTC"
+<14>Oct 11 12:00:00 web-1 app[4242]: syslog line

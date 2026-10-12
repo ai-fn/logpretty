@@ -1,0 +1,8 @@
+12:00:00.123 INFO  started  name=app
+12:00:01.123 ERROR failed  name=app exc_info="Traceback (most recent call last):\n  File \"a.py\", line 1"
+2026-10-11 12:00:02,123 - app - INFO - started
+2026-10-11 12:00:03.123 | INFO     | app:main:10 - started
+2026-10-11T12:00:04.123456Z [info     ] user logged in                 [app] user_id=5 ip=1.2.3.4
+Traceback (most recent call last):
+  File "a.py", line 1, in <module>
+ValueError: boom

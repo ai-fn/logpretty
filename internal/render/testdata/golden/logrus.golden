@@ -1,0 +1,7 @@
+12:00:00.000 INFO  server started  port=8080
+09:00:01.000 ERROR dial failed  error="connection refused"
+12:00:00.000 INFO  server started  port=8080
+12:00:01.000 WARN  disk "almost" full  used=91
+12:00:02.000 ERROR write failed  error=EOF
+\x1b[36mINFO\x1b[0m[0000] server started                                \x1b[36mport\x1b[0m=8080
+\x1b[33mWARN\x1b[0m[0003] disk almost full                              \x1b[33mused\x1b[0m=91

@@ -1,0 +1,5 @@
+12:00:00.123 INFO  server started  caller=server/main.go:42 addr=:8080
+12:00:01.500 ERROR query failed  caller=db/pool.go:88 error="context deadline exceeded" stacktrace="main.run\n	/app/main.go:30\nmain.main\n	/app/main.go:12"
+12:00:02.000 WARN  slow request  logger=api.http latency=1.5 path=/api/v1/users
+12:00:03.000 FATAL invariant broken  count=0 ok=false extra=null
+2026-10-11T12:00:00.123Z	INFO	server/main.go:42	server started	{"addr": ":8080"}

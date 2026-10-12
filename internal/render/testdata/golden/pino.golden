@@ -1,0 +1,5 @@
+12:00:00.123 INFO  request completed  pid=4242 hostname=web-1 req={"method":"GET","url":"/x"} res={"statusCode":200} responseTime=12
+12:00:01.123 ERROR boom  pid=4242 hostname=web-1 err={"type":"Error","message":"x","stack":"Error: x\n    at f (/app/a.js:1:1)"}
+12:00:02.123 TRACE trace  pid=4242 hostname=web-1
+12:00:03.123 FATAL fatal  pid=4242 hostname=web-1
+12:00:04.123 custom level  level=35 pid=4242 hostname=web-1

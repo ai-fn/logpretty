@@ -20,14 +20,18 @@ func (f *formatter) appendValue(dst []byte, v entry.Value) []byte {
 	case entry.KindObject, entry.KindArray:
 		return appendCompact(dst, v.Raw)
 	case entry.KindString:
-		text := v.Raw
-		if v.Escaped {
-			f.scratch = v.AppendText(f.scratch[:0])
-			text = f.scratch
-		}
-		return appendText(dst, text, " \t\"")
+		return appendText(dst, f.text(v), " \t\"")
 	}
 	return appendSafe(dst, v.Raw)
+}
+
+// text returns the value with its escapes decoded; the result is valid until the next call.
+func (f *formatter) text(v entry.Value) []byte {
+	if !v.Escaped {
+		return v.Raw
+	}
+	f.scratch = v.AppendText(f.scratch[:0])
+	return f.scratch
 }
 
 // appendKey appends a key, in quotes if it is empty or holds a space, a tab, a quote or an equals sign.

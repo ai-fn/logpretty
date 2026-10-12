@@ -1,0 +1,15 @@
+{"time":"2026-10-11T12:00:00.123Z","level":"info","msg":"request done","method":"GET","path":"/api/v1/users","status":200,"latency":"12ms"}
+{"time":"2026-10-11T12:00:01Z","level":"warn","msg":"slow query","query":"SELECT * FROM users WHERE name = \"bob\"","rows":0,"cached":false,"plan":null}
+{"time":"2026-10-11T12:00:02Z","level":"error","msg":"upstream failed","http":{"method":"POST", "url":"https://example.com/a b", "headers":{"accept":"*/*"}},"retries":[1, 2, 3],"err":"dial tcp 10.0.0.1:5432: connect: connection refused"}
+{"level":"debug","msg":"cache miss","key":"user:42","empty":"","user id":5,"a=b":1}
+{"msg":"only a message"}
+{"level":"fatal"}
+{"a":1,"b":"two words","c":[],"d":{}}
+{}
+{"time":"2026-10-11T12:00:03Z","level":"info","msg":"multi\nline\tmessage with \u001b[31mcolor\u001b[0m","path":"C:\\Program Files\\app","note":"привет мир"}
+time=2026-10-11T12:00:04Z level=info msg="logfmt line" verbose retries=3 empty= path=/tmp/x
+
+level=trace msg=x
+a=1 b=2
+plain line that stays as it is
+	indented with a tab
