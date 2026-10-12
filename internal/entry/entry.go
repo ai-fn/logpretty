@@ -67,6 +67,8 @@ type Entry struct {
 	Level  Level   // unknown unless a field names it; the one exception is a Serilog event without "@l", which is info
 	Fields []Field // every pair of the line, in its original order
 
+	CollectorPrefix bool // a log collector wrote Prefix (docker compose, kubectl --timestamps), not the logger
+
 	// Positions in Fields plus one, so that the zero Entry has no roles.
 	timeField, levelField, msgField int
 }

@@ -442,34 +442,39 @@ func FuzzUnixTime(f *testing.F) {
 	})
 }
 
-// referenceFormat says what a line is and what stands in front of its fields, by the rules as they are
-// stated: JSON alone, JSON after a short timestamp or "name |", logfmt, and plain for the rest.
-func referenceFormat(t *testing.T, body []byte) (format entry.Format, prefix string) {
+// referenceCollector says whether a prefix is one a log collector adds: short, and a timestamp or a "name |"
+// or both. "docker compose logs --timestamps" puts the timestamp after the bar, so that is where it is looked for.
+func referenceCollector(prefix string) bool {
+	// What follows the last bar: a timestamp or nothing. Without a bar, the whole prefix.
+	_, afterBar, hasBar := strings.Cut(prefix, "|")
+	for hasBar && strings.Contains(afterBar, "|") {
+		_, afterBar, _ = strings.Cut(afterBar, "|")
+	}
+	stamp := prefix
+	if hasBar {
+		stamp = strings.TrimLeft(afterBar, logfmtSpace)
+	}
+	_, isTime := referenceDateTime(stamp, time.UTC)
+	return len(prefix) <= 64 && (isTime || hasBar && stamp == "")
+}
+
+// referenceFormat says what a line is, what stands in front of its fields and whether a collector put it there,
+// by the rules as they are stated: JSON alone, JSON after a collector's prefix, logfmt, and plain for the rest.
+func referenceFormat(t *testing.T, body []byte) (format entry.Format, prefix string, collector bool) {
 	t.Helper()
 	if _, ok := referenceJSONFields(t, body); ok {
-		return entry.FormatJSON, ""
+		return entry.FormatJSON, "", false
 	}
 	if i := bytes.IndexByte(body, '{'); i > 0 {
 		prefix = string(bytes.Trim(body[:i], logfmtSpace))
-		// What follows the last bar: a timestamp or nothing. Without a bar, the whole prefix.
-		_, afterBar, hasBar := strings.Cut(prefix, "|")
-		for hasBar && strings.Contains(afterBar, "|") {
-			_, afterBar, _ = strings.Cut(afterBar, "|")
-		}
-		stamp := prefix
-		if hasBar {
-			stamp = strings.TrimLeft(afterBar, logfmtSpace)
-		}
-		_, isTime := referenceDateTime(stamp, time.UTC)
-		collector := isTime || hasBar && stamp == ""
-		if _, ok := referenceJSONFields(t, body[i:]); ok && len(prefix) <= 64 && collector {
-			return entry.FormatJSON, prefix
+		if _, ok := referenceJSONFields(t, body[i:]); ok && referenceCollector(prefix) {
+			return entry.FormatJSON, prefix, true
 		}
 	}
 	if _, prefix, ok := referenceLogfmtFields(body); ok {
-		return entry.FormatLogfmt, prefix
+		return entry.FormatLogfmt, prefix, referenceCollector(prefix)
 	}
-	return entry.FormatPlain, ""
+	return entry.FormatPlain, "", false
 }
 
 func FuzzParse(f *testing.F) {
@@ -483,6 +488,9 @@ func FuzzParse(f *testing.F) {
 		"\xef\xbb\xbf" + `svc | {"a":1}`, "\xef\xbb\xbf", `| {"a":1}`, `svc | ts=1791720000 lvl=dbg msg=x`, `a=1 b=2 {"c":3}`,
 		`svc-1  | 2026-10-11T12:00:00.123456789Z {"a":1}`, `svc-1 |2026-10-11 12:00:00 {"a":1}`, `a | b | {"a":1}`,
 		`svc | out 2026-10-11T12:00:00Z {"a":1}`, `svc | 2026-10-11T12:00:00Z INFO {"a":1}`, `[pod/web-1/app] {"a":1}`,
+		`svc | level=info msg=x`, `2026-10-11T12:00:01.000000000Z a=1 b=2`, `2026-10-11 12:00:00,123 a=1 b=2`, `| a=1 b=2`,
+		`svc-1  | 2026-10-11T12:00:00Z a=1 b=2`, `svc | out a=1 b=2`, `2026/10/11 12:00:01 INFO hello a=1 b=2`,
+		strings.Repeat("s", 63) + `| a=1 b=2`, strings.Repeat("s", 64) + `| a=1 b=2`,
 	} {
 		f.Add([]byte(seed))
 	}
@@ -491,7 +499,7 @@ func FuzzParse(f *testing.F) {
 		// Clipped, so that a read past the end panics instead of finding spare capacity.
 		line := slices.Clip(slices.Clone(data))
 		body := bytes.TrimPrefix(line, []byte("\xef\xbb\xbf"))
-		wantFormat, wantPrefix := referenceFormat(t, body)
+		wantFormat, wantPrefix, wantCollector := referenceFormat(t, body)
 		// The parser has seen other lines: nothing of them may show in this one.
 		p := Parser{Loc: testLoc}
 		p.Parse([]byte(`svc | {"time":"2026-10-11T12:00:00Z","level":"error","msg":"boom","a":{"b":[1,2]},"c":3,"d":4}`))
@@ -499,9 +507,9 @@ func FuzzParse(f *testing.F) {
 
 		e := p.Parse(line)
 
-		if e.Format != wantFormat || string(e.Prefix) != wantPrefix || (wantPrefix == "") != (e.Prefix == nil) {
-			t.Fatalf("Parse(%q): format %d with prefix %q (nil: %v), want format %d with prefix %q",
-				line, e.Format, e.Prefix, e.Prefix == nil, wantFormat, wantPrefix)
+		if e.Format != wantFormat || string(e.Prefix) != wantPrefix || (wantPrefix == "") != (e.Prefix == nil) || e.CollectorPrefix != wantCollector {
+			t.Fatalf("Parse(%q): format %d with prefix %q (nil: %v, collector: %v), want format %d with prefix %q (collector: %v)",
+				line, e.Format, e.Prefix, e.Prefix == nil, e.CollectorPrefix, wantFormat, wantPrefix, wantCollector)
 		}
 		switch e.Format {
 		case entry.FormatJSON:

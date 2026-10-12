@@ -39,6 +39,8 @@ func TestEntryReset(t *testing.T) {
 		Time:   time.Unix(1, 0),
 		Level:  LevelInfo,
 		Fields: make([]Field, 3, 8),
+
+		CollectorPrefix: true,
 	}
 	e.Fields[0].Key = []byte("level")
 	e.SetTimeField(0)
@@ -47,7 +49,7 @@ func TestEntryReset(t *testing.T) {
 
 	e.Reset()
 
-	if e.Line != nil || e.Prefix != nil || e.Format != FormatPlain || !e.Time.IsZero() || e.Level != LevelUnknown {
+	if e.Line != nil || e.Prefix != nil || e.CollectorPrefix || e.Format != FormatPlain || !e.Time.IsZero() || e.Level != LevelUnknown {
 		t.Errorf("Reset left data behind: %+v", e)
 	}
 	if e.TimeField() != -1 || e.LevelField() != -1 || e.MsgField() != -1 {

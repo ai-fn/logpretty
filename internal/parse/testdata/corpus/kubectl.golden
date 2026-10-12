@@ -3,7 +3,7 @@ line 1: json
   level: info
   time: -
   roles: time=- level=level msg=msg
-  prefix: "2026-10-11T12:00:00.123456789Z"
+  prefix: "2026-10-11T12:00:00.123456789Z" (collector)
   fields:
     "level"=<string>"info"
     "msg"=<string>"started"
@@ -12,7 +12,7 @@ line 2: logfmt
   level: info
   time: -
   roles: time=- level=level msg=msg
-  prefix: "2026-10-11T12:00:01.000000000Z"
+  prefix: "2026-10-11T12:00:01.000000000Z" (collector)
   fields:
     "level"=<string>"info"
     "msg"=<string>"hello"
@@ -24,7 +24,7 @@ line 4: json
   level: error
   time: -
   roles: time=- level=level msg=msg
-  prefix: "2026-10-11T12:00:03.000000000Z"
+  prefix: "2026-10-11T12:00:03.000000000Z" (collector)
   fields:
     "level"=<string>"error"
     "msg"=<string>"boom"

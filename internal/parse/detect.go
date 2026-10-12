@@ -41,6 +41,8 @@ func (p *Parser) Parse(line []byte) *entry.Entry {
 		return e
 	}
 	e.Prefix, e.Format = prefix, format
+	// The text before logfmt pairs is often the logger's own, as in klog or slog's "log" handler.
+	e.CollectorPrefix = len(prefix) <= maxJSONPrefix && isCollectorPrefix(prefix)
 	assignRoles(e, p.Loc)
 	return e
 }

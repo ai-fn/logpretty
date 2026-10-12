@@ -13,7 +13,8 @@ import (
 // describe renders everything Parse found, so that two entries can be compared and a difference read.
 func describe(t *testing.T, e *entry.Entry) string {
 	t.Helper()
-	return fmt.Sprintf("format %d, prefix %q, fields %+v, roles %+v", e.Format, e.Prefix, pairsOf(e.Fields), rolesOf(t, e))
+	return fmt.Sprintf("format %d, prefix %q (collector: %v), fields %+v, roles %+v",
+		e.Format, e.Prefix, e.CollectorPrefix, pairsOf(e.Fields), rolesOf(t, e))
 }
 
 func TestParse(t *testing.T) {
@@ -25,7 +26,9 @@ func TestParse(t *testing.T) {
 		line       string
 		format     entry.Format
 		wantPrefix string
-		want       []pair
+		// A logfmt prefix is a collector's own only if it looks like one; the prefix of JSON always does.
+		collector bool
+		want      []pair
 	}{
 		{name: "JSON", line: `{"a":1,"b":"x"}`, format: entry.FormatJSON, want: []pair{num("a", "1"), str("b", "x")}},
 		{name: "JSON in whitespace", line: " \t{\"a\":1} \r", format: entry.FormatJSON, want: []pair{num("a", "1")}},
@@ -58,6 +61,105 @@ func TestParse(t *testing.T) {
 			format:     entry.FormatLogfmt,
 			wantPrefix: `=x`,
 			want:       []pair{str("a", "1"), str("b", "2")},
+		},
+		{
+			name:       "logfmt after a container name",
+			line:       `svc | level=info msg=x`,
+			format:     entry.FormatLogfmt,
+			wantPrefix: `svc |`,
+			collector:  true,
+			want:       []pair{str("level", "info"), str("msg", "x")},
+		},
+		{
+			name:       "logfmt after a timestamp",
+			line:       `2026-10-11T12:00:01.000000000Z level=info msg=hello a=1`,
+			format:     entry.FormatLogfmt,
+			wantPrefix: `2026-10-11T12:00:01.000000000Z`,
+			collector:  true,
+			want:       []pair{str("level", "info"), str("msg", "hello"), str("a", "1")},
+		},
+		{
+			name:       "logfmt after a timestamp with a space in it",
+			line:       `2026-10-11 12:00:00,123 a=1 b=2`,
+			format:     entry.FormatLogfmt,
+			wantPrefix: `2026-10-11 12:00:00,123`,
+			collector:  true,
+			want:       []pair{str("a", "1"), str("b", "2")},
+		},
+		{
+			name:       "logfmt after a container name and a timestamp",
+			line:       `svc-1  | 2026-10-11T12:00:00Z a=1 b=2`,
+			format:     entry.FormatLogfmt,
+			wantPrefix: `svc-1  | 2026-10-11T12:00:00Z`,
+			collector:  true,
+			want:       []pair{str("a", "1"), str("b", "2")},
+		},
+		{
+			name:       "logfmt after a bar alone",
+			line:       `| a=1 b=2`,
+			format:     entry.FormatLogfmt,
+			wantPrefix: `|`,
+			collector:  true,
+			want:       []pair{str("a", "1"), str("b", "2")},
+		},
+		{
+			name:       "logfmt after a prefix of 64 bytes",
+			line:       strings.Repeat("s", 63) + `| a=1 b=2`,
+			format:     entry.FormatLogfmt,
+			wantPrefix: strings.Repeat("s", 63) + `|`,
+			collector:  true,
+			want:       []pair{str("a", "1"), str("b", "2")},
+		},
+		{
+			name:       "logfmt after a prefix of 65 bytes",
+			line:       strings.Repeat("s", 64) + `| a=1 b=2`,
+			format:     entry.FormatLogfmt,
+			wantPrefix: strings.Repeat("s", 64) + `|`,
+			want:       []pair{str("a", "1"), str("b", "2")},
+		},
+		{
+			name:       "logfmt after a word between the bar and the pairs",
+			line:       `svc | out a=1 b=2`,
+			format:     entry.FormatLogfmt,
+			wantPrefix: `svc | out`,
+			want:       []pair{str("a", "1"), str("b", "2")},
+		},
+		{
+			name:       "logfmt after a log of the logger itself",
+			line:       `2026/10/11 12:00:01 INFO hello a=1 b=2`,
+			format:     entry.FormatLogfmt,
+			wantPrefix: `2026/10/11 12:00:01 INFO hello`,
+			want:       []pair{str("a", "1"), str("b", "2")},
+		},
+		{
+			name:       "logfmt after a tab behind the bar",
+			line:       "svc |\t2026-10-11T12:00:00Z a=1 b=2",
+			format:     entry.FormatLogfmt,
+			wantPrefix: "svc |\t2026-10-11T12:00:00Z",
+			collector:  true,
+			want:       []pair{str("a", "1"), str("b", "2")},
+		},
+		{
+			name:       "logfmt with a collector prefix after a byte order mark",
+			line:       "\ufeffsvc | a=1 b=2",
+			format:     entry.FormatLogfmt,
+			wantPrefix: `svc |`,
+			collector:  true,
+			want:       []pair{str("a", "1"), str("b", "2")},
+		},
+		{
+			name:       "logfmt after a timestamp and more text, as structlog writes it",
+			line:       `2026-10-11T12:00:04.123456Z [info     ] user logged in [app] user_id=5 ip=1.2.3.4`,
+			format:     entry.FormatLogfmt,
+			wantPrefix: `2026-10-11T12:00:04.123456Z [info     ] user logged in [app]`,
+			want:       []pair{str("user_id", "5"), str("ip", "1.2.3.4")},
+		},
+		{
+			name:       "logfmt after a klog header",
+			line:       `E1011 12:00:02.000003   12345 controller.go:10] "Failed to sync" err="timeout" key="ns/x"`,
+			format:     entry.FormatLogfmt,
+			wantPrefix: `E1011 12:00:02.000003   12345 controller.go:10] "Failed to sync"`,
+			want:       []pair{str("err", "timeout"), str("key", "ns/x")},
 		},
 		{name: "plain", line: `hello world`},
 		{name: "empty line", line: ``},
@@ -204,6 +306,10 @@ func TestParse(t *testing.T) {
 			if string(e.Prefix) != tt.wantPrefix || (tt.wantPrefix == "") != (e.Prefix == nil) {
 				t.Errorf("Parse(%q): prefix = %q (nil: %v), want %q", tt.line, e.Prefix, e.Prefix == nil, tt.wantPrefix)
 			}
+			wantCollector := tt.collector || tt.format == entry.FormatJSON && tt.wantPrefix != ""
+			if e.CollectorPrefix != wantCollector {
+				t.Errorf("Parse(%q): CollectorPrefix = %v, want %v", tt.line, e.CollectorPrefix, wantCollector)
+			}
 			// An append to the prefix must not reach the bytes of the line that follow it.
 			if cap(e.Prefix) != len(e.Prefix) {
 				t.Errorf("Parse(%q): the prefix has %d spare bytes, want none", tt.line, cap(e.Prefix)-len(e.Prefix))
@@ -312,6 +418,9 @@ func TestParseMixedStream(t *testing.T) {
 		`{"msg":"x"}`,
 		`ts=1791720000 lvl=warn event=y extra`,
 		`{}`,
+		`svc | a=1 b=2`,
+		`a=1 b=2`,
+		`2026/10/11 12:00:00 a=1 b=2`,
 		`a=1 b=2`,
 		`took 5ms (retries=3, status=ok)`,
 		`{"level":"debug"}`,
@@ -372,6 +481,9 @@ func TestParseDoesNotAllocate(t *testing.T) {
 		`{"time":"2026-10-11T12:00:00.123+03:00","level":"info","msg":"request done","status":200,"tags":["a","b"]}`,
 		`2026-10-11T12:00:00.123456789Z {"level":"info","msg":"request done"}`,
 		`svc-1  | {"level":"info","msg":"request done"}`,
+		`svc-1  | level=info msg=started`,
+		`2026-10-11T12:00:01.000000000Z level=info msg=hello a=1`,
+		`2026/10/11 12:00:01 INFO hello a=1 b=2`,
 		`time=2026-10-11T12:00:00Z level=info msg="request \"done\"" status=200`,
 		`2026-10-11 12:00:00 INFO request done in 5ms`,
 		`took 5ms (retries=3, status=ok) and then some more plain text`,
