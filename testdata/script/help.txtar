@@ -1,0 +1,22 @@
+# --help prints the help to stdout and succeeds; -h is the same.
+exec logpretty --help
+stdout '^Usage: logpretty \[flags\] < input$'
+stdout '^      --color WHEN '
+stdout '^      --utc '
+stdout '^      --max-line N '
+stdout '^  -h, --help '
+stdout '^Examples:$'
+! stderr .
+cp stdout long
+
+exec logpretty -h
+cmp stdout long
+! stderr .
+
+# A flag with one dash still works.
+stdin input.log
+exec logpretty -utc -color=never
+stdout '^12:00:00.000 hi$'
+
+-- input.log --
+{"time":"2026-10-11T12:00:00Z","msg":"hi"}

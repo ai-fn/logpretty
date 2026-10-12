@@ -22,7 +22,7 @@ func (f *formatter) appendValue(dst []byte, v entry.Value) []byte {
 	case entry.KindString:
 		return appendText(dst, f.text(v), " \"")
 	}
-	return appendInline(dst, v.Raw)
+	return AppendInline(dst, v.Raw)
 }
 
 // text returns the value with its escapes decoded; the result is valid until the next call.
@@ -42,7 +42,7 @@ func appendKey(dst, key []byte) []byte {
 // appendText appends text safe, in quotes if it is empty or holds a byte of special.
 func appendText(dst, text []byte, special string) []byte {
 	if len(text) > 0 && !bytes.ContainsAny(text, special) {
-		return appendInline(dst, text)
+		return AppendInline(dst, text)
 	}
 	dst = append(dst, '"')
 	// Splitting at a quote cannot cut a UTF-8 sequence: no byte of one is ASCII.
@@ -51,10 +51,10 @@ func appendText(dst, text []byte, special string) []byte {
 		if i < 0 {
 			break
 		}
-		dst = append(appendInline(dst, text[:i]), '\\', '"')
+		dst = append(AppendInline(dst, text[:i]), '\\', '"')
 		text = text[i+1:]
 	}
-	return append(appendInline(dst, text), '"')
+	return append(AppendInline(dst, text), '"')
 }
 
 // appendCompact appends JSON without the whitespace between its tokens. Strings are kept as written, with
@@ -74,11 +74,11 @@ func appendCompact(dst, raw []byte) []byte {
 		case c == '"':
 			inString = true
 		case isJSONSpace(c):
-			dst = appendInline(dst, raw[start:i])
+			dst = AppendInline(dst, raw[start:i])
 			start = i + 1
 		}
 	}
-	return appendInline(dst, raw[start:])
+	return AppendInline(dst, raw[start:])
 }
 
 func isJSONSpace(c byte) bool {

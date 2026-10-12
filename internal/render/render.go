@@ -67,7 +67,7 @@ func (r *Renderer) AppendEntry(dst []byte, e *entry.Entry) []byte {
 	if msg >= 0 {
 		// Spaces at the end would be taken for the gap before the fields, or left at the end of the line.
 		if text := bytes.TrimRight(r.text(e.Fields[msg].Value), " "); len(text) > 0 {
-			dst = appendInline(append(dst, sep...), text)
+			dst = AppendInline(append(dst, sep...), text)
 			sep = "  "
 		}
 	}
@@ -80,7 +80,7 @@ func (r *Renderer) AppendEntry(dst []byte, e *entry.Entry) []byte {
 		sep = " "
 		// A logfmt word without "=" is a part of the text, not a key.
 		if f.Value.Kind == entry.KindNone {
-			dst = appendInline(dst, f.Key)
+			dst = AppendInline(dst, f.Key)
 			continue
 		}
 		dst = append(appendKey(append(dst, th.Key...), f.Key), '=')

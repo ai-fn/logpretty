@@ -15,6 +15,8 @@ import (
 	"testing/iotest"
 	"testing/synctest"
 	"time"
+
+	"github.com/ai-fn/logpretty/internal/cli"
 )
 
 type failWriter struct{}
@@ -101,14 +103,6 @@ func TestRun(t *testing.T) {
 
 		{name: "huge max-line allocates nothing up front", args: []string{"-max-line=9223372036854775807"}, in: "abc\n", wantOut: "abc\n"},
 		{name: "double dash ends the flags", args: []string{"--"}, in: "abc\n", wantOut: "abc\n"},
-		{name: "positional argument after double dash", args: []string{"--", "file.log"}, wantCode: 2, wantStderr: "unexpected argument"},
-		{name: "unknown flag", args: []string{"-nope"}, wantCode: 2, wantStderr: "flag provided but not defined"},
-		{name: "positional argument", args: []string{"file.log"}, wantCode: 2, wantStderr: "unexpected argument"},
-		{name: "max-line zero", args: []string{"-max-line", "0"}, wantCode: 2, wantStderr: "-max-line must be positive"},
-		{name: "max-line negative", args: []string{"-max-line", "-5"}, wantCode: 2, wantStderr: "-max-line must be positive"},
-		{name: "max-line not a number", args: []string{"-max-line", "abc"}, wantCode: 2, wantStderr: "invalid value"},
-		{name: "help", args: []string{"-h"}, wantStderr: "Usage of logpretty"},
-		{name: "utc takes no value", args: []string{"-utc", "yes"}, wantCode: 2, wantStderr: "unexpected argument"},
 
 		{
 			name:    "color always",
@@ -121,10 +115,6 @@ func TestRun(t *testing.T) {
 		{name: "color never", args: []string{"-color=never"}, in: "level=warn msg=x\n", wantOut: "WARN  x\n"},
 		{name: "the last color wins", args: []string{"-color=always", "-color=never"}, in: "level=warn msg=x\n", wantOut: "WARN  x\n"},
 		{name: "color auto does not color what is not a terminal", args: []string{"-color=auto"}, in: "level=warn msg=x\n", wantOut: "WARN  x\n"},
-		{name: "color of an unknown kind", args: []string{"-color=sometimes"}, wantCode: 2, wantStderr: `invalid color mode "sometimes"`},
-		{name: "color in another case", args: []string{"-color=Always"}, wantCode: 2, wantStderr: `invalid color mode "Always"`},
-		{name: "color without a value", args: []string{"-color"}, wantCode: 2, wantStderr: "flag needs an argument"},
-		{name: "color with an empty value", args: []string{"-color="}, wantCode: 2, wantStderr: `invalid color mode ""`},
 	}
 
 	for _, tt := range tests {
@@ -145,6 +135,61 @@ func TestRun(t *testing.T) {
 				t.Errorf("stderr = %q, want it to contain %q", stderr.String(), tt.wantStderr)
 			}
 		})
+	}
+}
+
+// The shape of a failure: one line, the hint, nothing else. The arguments are tested in internal/cli.
+func TestRunArgumentErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{name: "unknown flag", args: []string{"--nope"}, want: "flag provided but not defined: -nope"},
+		{name: "positional argument", args: []string{"file.log"}, want: `unexpected argument "file.log"`},
+		{name: "positional argument after double dash", args: []string{"--", "file.log"}, want: `unexpected argument "file.log"`},
+		{name: "max-line zero", args: []string{"--max-line", "0"}, want: "--max-line must be positive"},
+		{name: "color of an unknown kind", args: []string{"--color=sometimes"}, want: `invalid value "sometimes" for flag -color: invalid color mode "sometimes": want auto, always or never`},
+		{name: "control characters in an argument", args: []string{"--\x1b[31m"}, want: `flag provided but not defined: -\x1b[31m`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			code := Run(t.Context(), tt.args, iotest.ErrReader(errors.New("boom")), &stdout, &stderr)
+
+			want := "logpretty: " + tt.want + "\nRun 'logpretty --help' for usage.\n"
+			if code != 2 || stdout.Len() != 0 || stderr.String() != want {
+				t.Errorf("code = %d, stdout = %q, stderr = %q; want 2, no output and %q", code, stdout.String(), stderr.String(), want)
+			}
+		})
+	}
+}
+
+func TestRunHelp(t *testing.T) {
+	for _, arg := range []string{"-h", "--help"} {
+		var stdout, stderr bytes.Buffer
+
+		code := Run(t.Context(), []string{arg}, iotest.ErrReader(errors.New("boom")), &stdout, &stderr)
+
+		if code != 0 || stdout.String() != cli.Usage || stderr.Len() != 0 {
+			t.Errorf("Run(%s): code = %d, stdout = %q, stderr = %q; want 0, the help and nothing on stderr", arg, code, stdout.String(), stderr.String())
+		}
+	}
+}
+
+func TestRunHelpWriteErrors(t *testing.T) {
+	var stderr bytes.Buffer
+	if code := Run(t.Context(), []string{"--help"}, strings.NewReader(""), failWriter{}, &stderr); code != 1 || !strings.Contains(stderr.String(), "write:") {
+		t.Errorf("help into a failing stdout: code = %d, stderr = %q; want 1 and a write error", code, stderr.String())
+	}
+
+	for _, cause := range closedPipeErrs {
+		stderr.Reset()
+		out := writerFunc(func([]byte) (int, error) { return 0, cause })
+		if code := Run(t.Context(), []string{"--help"}, strings.NewReader(""), out, &stderr); code != 0 || stderr.Len() != 0 {
+			t.Errorf("help into a closed stdout (%v): code = %d, stderr = %q; want 0 and nothing", cause, code, stderr.String())
+		}
 	}
 }
 

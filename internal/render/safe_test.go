@@ -96,8 +96,8 @@ func TestAppendInline(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := string(appendInline([]byte("x="), []byte(tt.in))); got != "x="+tt.want {
-				t.Errorf("appendInline(%q) = %q, want %q", tt.in, got, "x="+tt.want)
+			if got := string(AppendInline([]byte("x="), []byte(tt.in))); got != "x="+tt.want {
+				t.Errorf("AppendInline(%q) = %q, want %q", tt.in, got, "x="+tt.want)
 			}
 		})
 	}
@@ -108,8 +108,8 @@ func TestAppendInline(t *testing.T) {
 			continue
 		}
 		in := []byte{'a', byte(b), 'b'}
-		if got, want := string(appendInline(nil, in)), string(appendSafe(nil, in)); got != want {
-			t.Errorf("appendInline(%q) = %q, want %q as appendSafe gives", in, got, want)
+		if got, want := string(AppendInline(nil, in)), string(appendSafe(nil, in)); got != want {
+			t.Errorf("AppendInline(%q) = %q, want %q as appendSafe gives", in, got, want)
 		}
 	}
 }

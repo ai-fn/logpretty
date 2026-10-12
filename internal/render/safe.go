@@ -9,9 +9,9 @@ const hexDigits = "0123456789abcdef"
 // the tab, bidi overrides, line separators. Invalid UTF-8 becomes U+FFFD per byte; dst must not share memory with src.
 func appendSafe(dst, src []byte) []byte { return appendEscaped(dst, src, true) }
 
-// appendInline is appendSafe for a part of a rendered line: there a tab would break the layout, so it is
-// written out as well.
-func appendInline(dst, src []byte) []byte { return appendEscaped(dst, src, false) }
+// AppendInline is appendSafe for a part of a line, of the output or of a message: there a tab would break
+// the layout, so it is written out as well. dst must not share memory with src.
+func AppendInline(dst, src []byte) []byte { return appendEscaped(dst, src, false) }
 
 func appendEscaped(dst, src []byte, keepTab bool) []byte {
 	start := 0 // src[start:i] is clean and not appended yet

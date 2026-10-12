@@ -1,0 +1,17 @@
+Usage: logpretty [flags] < input
+
+Pretty-print JSON, logfmt and plain-text logs read from stdin. The format of
+every line is detected on its own, so mixed streams need no flags.
+
+Flags:
+      --color WHEN   color the output: auto (only on a terminal, the default),
+                     always or never
+      --utc          show times in UTC instead of the local time zone
+      --max-line N   longest line to keep, in bytes (default 1048576); the rest
+                     of a longer line is dropped
+  -h, --help         print this help
+
+Examples:
+  kubectl logs -f pod | logpretty
+  docker compose logs -f | logpretty --utc
+  logpretty --color=always < app.log | less -R

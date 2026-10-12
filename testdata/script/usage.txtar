@@ -1,20 +1,26 @@
-# Invalid arguments fail with a message on stderr and print nothing to stdout.
-! exec logpretty -nope
-stderr 'flag provided but not defined: -nope'
+# Invalid arguments fail with one line on stderr and a pointer to the help; nothing goes to stdout.
+! exec logpretty --nope
+stderr '^logpretty: flag provided but not defined: -nope$'
+stderr '^Run ''logpretty --help'' for usage\.$'
+! stderr 'Usage:'
 ! stdout .
 
 ! exec logpretty file.log
-stderr 'unexpected argument "file.log"'
+stderr '^logpretty: unexpected argument "file.log"$'
 ! stdout .
 
-! exec logpretty -max-line 0
-stderr '-max-line must be positive'
+! exec logpretty --max-line 0
+stderr '^logpretty: --max-line must be positive$'
 ! stdout .
 
-# -h prints the usage to stderr and succeeds.
-exec logpretty -h
-stderr 'Usage of logpretty'
-stderr '-max-line'
-stderr '-utc'
-stderr '-color'
+! exec logpretty --color
+stderr '^logpretty: flag needs an argument: -color$'
 ! stdout .
+
+# Input is not read when the arguments are wrong.
+stdin input.log
+! exec logpretty --nope
+! stdout .
+
+-- input.log --
+{"msg":"hello"}

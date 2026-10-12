@@ -5,13 +5,13 @@ import (
 	"bufio"
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"os"
 	"sync"
 	"time"
 
+	"github.com/ai-fn/logpretty/internal/cli"
 	"github.com/ai-fn/logpretty/internal/linereader"
 	"github.com/ai-fn/logpretty/internal/parse"
 	"github.com/ai-fn/logpretty/internal/render"
@@ -26,40 +26,25 @@ const writeBufferSize = 64 << 10
 // Run executes the CLI and returns the process exit code: 0 success or stdout closed by its reader,
 // 1 read or write error, 2 invalid arguments, ExitInterrupted when ctx is canceled before stdin ends.
 func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
-	fs := flag.NewFlagSet("logpretty", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	maxLine := fs.Int("max-line", linereader.DefaultMaxLine, "longest line to keep, in `bytes`; the rest of a longer line is dropped")
-	utc := fs.Bool("utc", false, "show times in UTC instead of the local time zone")
-	color := term.ColorAuto
-	fs.Func("color", "`when` to color the output: auto (on a terminal, the default), always or never", func(s string) (err error) {
-		color, err = term.ParseColorMode(s)
-		return err
-	})
-	if err := fs.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			return 0
-		}
-		return 2
-	}
-	if fs.NArg() > 0 {
-		_, _ = fmt.Fprintf(stderr, "logpretty: unexpected argument %q\n", fs.Arg(0))
-		return 2
-	}
-	if *maxLine <= 0 {
-		_, _ = fmt.Fprintln(stderr, "logpretty: -max-line must be positive")
+	cfg, err := cli.Parse(args)
+	switch {
+	case errors.Is(err, cli.ErrHelp):
+		return writeHelp(stdout, stderr)
+	case err != nil:
+		cli.WriteError(stderr, err)
 		return 2
 	}
 
 	p := &pipeline{
-		r: linereader.New(stdin, *maxLine),
+		r: linereader.New(stdin, cfg.MaxLine),
 		w: bufio.NewWriterSize(stdout, writeBufferSize),
 	}
-	if *utc {
+	if cfg.UTC {
 		// The same zone for both, so that a time written without one is shown as it was written.
 		p.parser.Loc, p.renderer.Loc = time.UTC, time.UTC
 	}
 	// stdout itself is asked, not the buffer in front of it: only the file knows whether it is a terminal.
-	if term.UseColor(color, stdout, os.Getenv) {
+	if term.UseColor(cfg.Color, stdout, os.Getenv) {
 		p.renderer.Theme = render.DefaultTheme()
 	}
 	// A read from stdin cannot be interrupted, so the pipeline runs aside and is abandoned on cancel.
@@ -78,6 +63,17 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		p.stop()
 		return ExitInterrupted
 	}
+}
+
+// writeHelp prints the help; its reader may leave early too, as in `logpretty --help | head`.
+func writeHelp(stdout, stderr io.Writer) int {
+	if _, werr := io.WriteString(stdout, cli.Usage); werr != nil {
+		if err := writeError(werr); !errors.Is(err, errStdoutClosed) {
+			_, _ = fmt.Fprintln(stderr, "logpretty:", err)
+			return 1
+		}
+	}
+	return 0
 }
 
 var errStdoutClosed = errors.New("stdout is closed")

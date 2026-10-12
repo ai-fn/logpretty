@@ -65,9 +65,9 @@ func FuzzAppendSafe(f *testing.F) {
 			t.Fatalf("appendSafe(%q)\n got %q\nwant %q", src, out, want)
 		}
 		// Inside a rendered part the tab is written out too; nothing else differs.
-		inline := string(appendInline([]byte("x="), src))
+		inline := string(AppendInline([]byte("x="), src))
 		if wantInline := "x=" + strings.ReplaceAll(want, "\t", `\t`); inline != wantInline {
-			t.Fatalf("appendInline(%q)\n got %q\nwant %q", src, inline, wantInline)
+			t.Fatalf("AppendInline(%q)\n got %q\nwant %q", src, inline, wantInline)
 		}
 		if !utf8.Valid(out) {
 			t.Fatalf("appendSafe(%q) = %q is not valid UTF-8", src, out)
