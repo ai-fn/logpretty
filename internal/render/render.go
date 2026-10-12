@@ -35,6 +35,7 @@ func (r *Renderer) AppendEntry(dst []byte, e *entry.Entry) []byte {
 	// The separator is written before a part, not after it, so that a part the entry lacks leaves no spaces behind.
 	sep := ""
 
+	// The prefix, like a plain line, keeps its tabs; only the parts built here write them out.
 	if len(e.Prefix) > 0 {
 		style := ""
 		if e.CollectorPrefix {
@@ -65,8 +66,8 @@ func (r *Renderer) AppendEntry(dst []byte, e *entry.Entry) []byte {
 	msg := e.MsgField()
 	if msg >= 0 {
 		// Spaces at the end would be taken for the gap before the fields, or left at the end of the line.
-		if text := bytes.TrimRight(r.text(e.Fields[msg].Value), " \t"); len(text) > 0 {
-			dst = appendSafe(append(dst, sep...), text)
+		if text := bytes.TrimRight(r.text(e.Fields[msg].Value), " "); len(text) > 0 {
+			dst = appendInline(append(dst, sep...), text)
 			sep = "  "
 		}
 	}
@@ -79,7 +80,7 @@ func (r *Renderer) AppendEntry(dst []byte, e *entry.Entry) []byte {
 		sep = " "
 		// A logfmt word without "=" is a part of the text, not a key.
 		if f.Value.Kind == entry.KindNone {
-			dst = appendSafe(dst, f.Key)
+			dst = appendInline(dst, f.Key)
 			continue
 		}
 		dst = append(appendKey(append(dst, th.Key...), f.Key), '=')

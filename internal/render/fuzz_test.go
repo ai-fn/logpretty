@@ -60,8 +60,14 @@ func FuzzAppendSafe(f *testing.F) {
 			t.Fatalf("appendSafe(%q) = %q: the start of dst was changed", src, got)
 		}
 		out := got[2:]
-		if want := referenceSafe(string(src)); string(out) != want {
+		want := referenceSafe(string(src))
+		if string(out) != want {
 			t.Fatalf("appendSafe(%q)\n got %q\nwant %q", src, out, want)
+		}
+		// Inside a rendered part the tab is written out too; nothing else differs.
+		inline := string(appendInline([]byte("x="), src))
+		if wantInline := "x=" + strings.ReplaceAll(want, "\t", `\t`); inline != wantInline {
+			t.Fatalf("appendInline(%q)\n got %q\nwant %q", src, inline, wantInline)
 		}
 		if !utf8.Valid(out) {
 			t.Fatalf("appendSafe(%q) = %q is not valid UTF-8", src, out)
@@ -88,7 +94,7 @@ func FuzzAppendSafe(f *testing.F) {
 // referenceQuoted is the rule for a key or a value stated apart from the code: in quotes when empty or when
 // it holds one of the characters in special, with \" for a quote, and written safely either way.
 func referenceQuoted(text, special string) string {
-	safe := referenceSafe(text)
+	safe := strings.ReplaceAll(referenceSafe(text), "\t", `\t`)
 	if text == "" || strings.ContainsAny(text, special) {
 		return `"` + strings.ReplaceAll(safe, `"`, `\"`) + `"`
 	}
@@ -119,7 +125,7 @@ func checkNothingUnsafe(t *testing.T, what, text, got string) {
 
 func FuzzFormat(f *testing.F) {
 	for _, seed := range []string{
-		"", "a", "a b", `say "hi"`, "k=v", "a\tb", "\xff", "\x1b[31m", `a\nb`, `\u202e`, `\ud83d\ude80`, `C:\my dir`, `"`,
+		"", "a", "a b", `say "hi"`, "k=v", "a\tb", "a\tb\"c", "a \tb", "{\"a\":\"x\ty\", \"b\":1}", "[\t1,\t\"x\ty\"]", "\xff", "\x1b[31m", `a\nb`, `\u202e`, `\ud83d\ude80`, `C:\my dir`, `"`,
 		`{"a":1}`, `[ 1 , {"b" : "c d"} ]`, `{"a":"\u001b[0m"}`, `{ "a" : "x\\" , "b" : 1 }`, "{\"a\":\"x\x7f\xff\"}", `[ ]`, `{"a":"x\`, `[ "x`, `}{`, `\`,
 	} {
 		f.Add([]byte(seed))
@@ -133,13 +139,17 @@ func FuzzFormat(f *testing.F) {
 		// The text as written in a logfmt value, and as the escapes of a JSON string would decode.
 		for _, escaped := range []bool{false, true} {
 			v := entry.Value{Raw: raw, Kind: entry.KindString, Escaped: escaped}
-			checkShown(t, "value", string(fm.appendValue(nil, v)), string(v.AppendText(nil)), " \t\"")
+			checkShown(t, "value", string(fm.appendValue(nil, v)), string(v.AppendText(nil)), " \"")
 		}
-		checkShown(t, "key", string(appendKey(nil, raw)), string(raw), " \t\"=")
+		checkShown(t, "key", string(appendKey(nil, raw)), string(raw), " \"=")
 
 		// Whatever the bytes are, as an object or an array: no panic, nothing unsafe in the output.
 		for _, kind := range []entry.Kind{entry.KindObject, entry.KindArray} {
-			checkNothingUnsafe(t, "composite", string(raw), string(fm.appendValue(nil, entry.Value{Raw: raw, Kind: kind})))
+			composite := string(fm.appendValue(nil, entry.Value{Raw: raw, Kind: kind}))
+			checkNothingUnsafe(t, "composite", string(raw), composite)
+			if strings.Contains(composite, "\t") {
+				t.Fatalf("composite %q is shown as %q, which holds a tab", raw, composite)
+			}
 		}
 
 		// A JSON object or array comes out as the compact form of the same JSON.
@@ -229,6 +239,10 @@ func FuzzRender(f *testing.F) {
 	} {
 		f.Add([]byte(seed), uint32(0))
 	}
+	// A tab in each part a structured line is built from, and in its prefix, where it stays.
+	for _, seed := range []string{`{"msg":"a\tb","k\t":"c\td"}`, "aaaaaaaa=1 b=\"x\ty\"", "aaaaaaaaaa=1 bbbbbbbbbb=2 c=\"x\ty", "one\ttwo three a=1 b=2"} {
+		f.Add([]byte(seed), uint32(0))
+	}
 	f.Add([]byte("abc"), uint32(3<<20))
 
 	f.Fuzz(func(t *testing.T, data []byte, n uint32) {
@@ -247,6 +261,7 @@ func FuzzRender(f *testing.F) {
 
 		e := p.Parse(line)
 		plain := e.Format == entry.FormatPlain
+		structured, prefixTabs := !plain && len(e.Fields) > 0, bytes.Count(e.Prefix, []byte("\t"))
 		got := string(r.AppendEntry([]byte(">"), e))
 
 		fresh := Renderer{Loc: testLoc}
@@ -255,6 +270,10 @@ func FuzzRender(f *testing.F) {
 			t.Fatalf("line %q after other lines\n got %q\nwant %q", line, got, want)
 		}
 		checkLine(t, "the entry", line, got[1:])
+		// The parts a structured line is built from write a tab out; only its prefix is printed as written.
+		if tabs := strings.Count(got, "\t"); structured && tabs != prefixTabs {
+			t.Fatalf("line %q is shown as %q with %d tabs, want the %d of its prefix", line, got, tabs, prefixTabs)
+		}
 		// A plain line is the line itself, made safe.
 		if want := referenceSafe(strings.TrimPrefix(string(line), "\ufeff")) + "\n"; plain && got[1:] != want {
 			t.Fatalf("plain line %q\n got %q\nwant %q", line, got[1:], want)

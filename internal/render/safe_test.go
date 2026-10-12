@@ -82,6 +82,38 @@ func TestAppendSafe(t *testing.T) {
 	}
 }
 
+func TestAppendInline(t *testing.T) {
+	tests := []struct {
+		name, in, want string
+	}{
+		{name: "empty", in: "", want: ""},
+		{name: "text", in: "hello world", want: "hello world"},
+		{name: "tab is written out", in: "a\tb\t", want: `a\tb\t`},
+		{name: "tab alone", in: "\t", want: `\t`},
+		{name: "tab next to other escapes", in: "a\t\nb\x1b\tc", want: `a\t\nb\x1b\tc`},
+		{name: "tab between runes of several bytes", in: "привет\tмир", want: `привет\tмир`},
+		{name: "tab after an invalid byte", in: "\xff\t", want: "�" + `\t`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := string(appendInline([]byte("x="), []byte(tt.in))); got != "x="+tt.want {
+				t.Errorf("appendInline(%q) = %q, want %q", tt.in, got, "x="+tt.want)
+			}
+		})
+	}
+
+	// Every other byte comes out as in a line that is printed as written.
+	for b := range 256 {
+		if b == '\t' {
+			continue
+		}
+		in := []byte{'a', byte(b), 'b'}
+		if got, want := string(appendInline(nil, in)), string(appendSafe(nil, in)); got != want {
+			t.Errorf("appendInline(%q) = %q, want %q as appendSafe gives", in, got, want)
+		}
+	}
+}
+
 // Every byte on its own: the C0 range, DEL, and every byte from 0x80 up, none of which is a whole rune.
 func TestAppendSafeEveryByte(t *testing.T) {
 	for b := range 256 {

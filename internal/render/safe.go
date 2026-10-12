@@ -5,13 +5,19 @@ import "unicode/utf8"
 
 const hexDigits = "0123456789abcdef"
 
-// appendSafe appends src with what a terminal would act on written out as text: control characters, bidi
-// overrides and line separators. Invalid UTF-8 becomes U+FFFD per byte; dst must not share memory with src.
-func appendSafe(dst, src []byte) []byte {
+// appendSafe appends src with what a terminal would act on written out as text: control characters except
+// the tab, bidi overrides, line separators. Invalid UTF-8 becomes U+FFFD per byte; dst must not share memory with src.
+func appendSafe(dst, src []byte) []byte { return appendEscaped(dst, src, true) }
+
+// appendInline is appendSafe for a part of a rendered line: there a tab would break the layout, so it is
+// written out as well.
+func appendInline(dst, src []byte) []byte { return appendEscaped(dst, src, false) }
+
+func appendEscaped(dst, src []byte, keepTab bool) []byte {
 	start := 0 // src[start:i] is clean and not appended yet
 	for i := 0; i < len(src); {
 		c := src[i]
-		if ' ' <= c && c < 0x7f || c == '\t' {
+		if ' ' <= c && c < 0x7f || c == '\t' && keepTab {
 			i++
 			continue
 		}
@@ -45,11 +51,13 @@ func isUnsafeRune(r rune) bool {
 		r == 0x2028 || r == 0x2029 || r == 0xfeff
 }
 
-// appendEscape writes r as \n, \r, \xNN or \uNNNN.
+// appendEscape writes r as \n, \r, \t, \xNN or \uNNNN.
 func appendEscape(dst []byte, r rune) []byte {
 	switch {
 	case r == '\n':
 		return append(dst, '\\', 'n')
+	case r == '\t':
+		return append(dst, '\\', 't')
 	case r == '\r':
 		return append(dst, '\\', 'r')
 	case r < 0x100:

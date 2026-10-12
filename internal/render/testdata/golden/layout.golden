@@ -6,7 +6,7 @@ only a message
 FATAL
 a=1 b="two words" c=[] d={}
 {}
-12:00:03.000 INFO  multi\nline	message with \x1b[31mcolor\x1b[0m  path="C:\Program Files\app" note="привет мир"
+12:00:03.000 INFO  multi\nline\tmessage with \x1b[31mcolor\x1b[0m  path="C:\Program Files\app" note="привет мир"
 12:00:04.000 INFO  logfmt line  verbose retries=3 empty="" path=/tmp/x
 
 TRACE x

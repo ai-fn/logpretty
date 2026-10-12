@@ -121,7 +121,13 @@ func TestAppendEntry(t *testing.T) {
 
 		{name: "escapes in a message", line: `{"msg":"a\u001b[31mb\nc"}`, want: `a\x1b[31mb\nc`},
 		{name: "message is not quoted", line: `{"msg":"say \"hi\" there"}`, want: `say "hi" there`},
-		{name: "spaces at the end of a message are dropped", line: `{"level":"info","msg":"x \t ","a":1}`, want: `INFO  x  a=1`},
+		{name: "tab in a message and in a value is written out", line: `{"msg":"a\tb","k":"c\td"}`, want: `a\tb  k=c\td`},
+		{name: "tab in the text before logfmt pairs stays", line: "one\ttwo three a=1 b=2", want: "one\ttwo three a=1 b=2"},
+		{name: "tab in a quoted logfmt value is written out", line: "aaaaaaaa=1 b=\"x\ty\"", want: `aaaaaaaa=1 b=x\ty`},
+		{name: "tab after a quote that is not closed is written out", line: "aaaaaaaaaa=1 bbbbbbbbbb=2 c=\"x\ty", want: `aaaaaaaaaa=1 bbbbbbbbbb=2 c="x\ty`},
+		{name: "spaces at the end of a message are dropped", line: `{"level":"info","msg":"x  ","a":1}`, want: `INFO  x  a=1`},
+		{name: "tabs at the end of a message are written out", line: `{"msg":"x\t \t","a":1}`, want: `x\t \t  a=1`},
+		{name: "a message of a tab", line: `{"msg":"\t"}`, want: `\t`},
 		{name: "spaces at the end of the last part are dropped", line: `{"level":"info","msg":"x  "}`, want: `INFO  x`},
 		{name: "spaces at the start of a message are kept", line: `{"msg":"  x"}`, want: `  x`},
 		{name: "a message of spaces is not printed", line: `{"level":"warn","msg":"  ","a":1}`, want: `WARN  a=1`},
@@ -245,6 +251,11 @@ func TestAppendEntryOddEntries(t *testing.T) {
 		{name: "negative level", e: entry.Entry{Format: entry.FormatJSON, Level: -1, Fields: []entry.Field{field}}, want: "a=1\n"},
 		{name: "plain with fields", e: entry.Entry{Line: []byte("raw"), Fields: []entry.Field{field}}, want: "raw\n"},
 		{
+			name: "tab in a word without a value",
+			e:    entry.Entry{Format: entry.FormatLogfmt, Fields: []entry.Field{{Key: []byte("a\tb")}, field}},
+			want: `a\tb a=1` + "\n",
+		},
+		{
 			name: "time and level without fields of their own",
 			e: entry.Entry{
 				Format: entry.FormatJSON, Fields: []entry.Field{field},
@@ -308,6 +319,7 @@ func TestAppendTruncated(t *testing.T) {
 		{name: "larger unit", line: "abc", dropped: 3000, want: "abc…[+2.9KiB]"},
 		{name: "rune cut by the limit", line: "ab\xd0", dropped: 1, want: "ab\ufffd…[+1B]"},
 		{name: "control characters", line: "a\x1bb", dropped: 1, want: `a\x1bb…[+1B]`},
+		{name: "tab stays", line: "a\tb", dropped: 1, want: "a\tb…[+1B]"},
 		{name: "JSON is not parsed", line: `{"msg":"x","a":"`, dropped: 10, want: `{"msg":"x","a":"…[+10B]`},
 		{name: "byte order mark", line: "\ufeffabc", dropped: 2, want: "abc…[+2B]"},
 		{name: "nothing kept", line: "", dropped: 7, want: "…[+7B]"},

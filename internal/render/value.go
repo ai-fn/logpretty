@@ -11,7 +11,7 @@ type formatter struct {
 	scratch []byte
 }
 
-// appendValue appends the value as it is shown: a string safe, quoted if empty or holding a space, tab or quote;
+// appendValue appends the value as it is shown: a string safe, quoted if empty or holding a space or a quote;
 // an object or array as compact JSON; the rest as written. dst must not share memory with v.Raw.
 func (f *formatter) appendValue(dst []byte, v entry.Value) []byte {
 	switch v.Kind {
@@ -20,9 +20,9 @@ func (f *formatter) appendValue(dst []byte, v entry.Value) []byte {
 	case entry.KindObject, entry.KindArray:
 		return appendCompact(dst, v.Raw)
 	case entry.KindString:
-		return appendText(dst, f.text(v), " \t\"")
+		return appendText(dst, f.text(v), " \"")
 	}
-	return appendSafe(dst, v.Raw)
+	return appendInline(dst, v.Raw)
 }
 
 // text returns the value with its escapes decoded; the result is valid until the next call.
@@ -34,15 +34,15 @@ func (f *formatter) text(v entry.Value) []byte {
 	return f.scratch
 }
 
-// appendKey appends a key, in quotes if it is empty or holds a space, a tab, a quote or an equals sign.
+// appendKey appends a key, in quotes if it is empty or holds a space, a quote or an equals sign.
 func appendKey(dst, key []byte) []byte {
-	return appendText(dst, key, " \t\"=")
+	return appendText(dst, key, " \"=")
 }
 
 // appendText appends text safe, in quotes if it is empty or holds a byte of special.
 func appendText(dst, text []byte, special string) []byte {
 	if len(text) > 0 && !bytes.ContainsAny(text, special) {
-		return appendSafe(dst, text)
+		return appendInline(dst, text)
 	}
 	dst = append(dst, '"')
 	// Splitting at a quote cannot cut a UTF-8 sequence: no byte of one is ASCII.
@@ -51,10 +51,10 @@ func appendText(dst, text []byte, special string) []byte {
 		if i < 0 {
 			break
 		}
-		dst = append(appendSafe(dst, text[:i]), '\\', '"')
+		dst = append(appendInline(dst, text[:i]), '\\', '"')
 		text = text[i+1:]
 	}
-	return append(appendSafe(dst, text), '"')
+	return append(appendInline(dst, text), '"')
 }
 
 // appendCompact appends JSON without the whitespace between its tokens. Strings are kept as written, with
@@ -74,11 +74,11 @@ func appendCompact(dst, raw []byte) []byte {
 		case c == '"':
 			inString = true
 		case isJSONSpace(c):
-			dst = appendSafe(dst, raw[start:i])
+			dst = appendInline(dst, raw[start:i])
 			start = i + 1
 		}
 	}
-	return appendSafe(dst, raw[start:])
+	return appendInline(dst, raw[start:])
 }
 
 func isJSONSpace(c byte) bool {

@@ -6,6 +6,6 @@
 10:00:02.123 ERROR failed  err="open /x: no such file or directory"
 10:00:03.123 INFO  custom
 10:00:04.123 FATAL down
-10:00:05.123 INFO  tab	here \x1b[31mred\x1b[0m  n=1
+10:00:05.123 INFO  tab\there \x1b[31mred\x1b[0m  n=1
 2026/10/11 12:00:00 INFO hello count=3
 2026/10/11 12:00:01 INFO hello a=1 b=2

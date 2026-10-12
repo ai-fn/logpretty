@@ -6,7 +6,7 @@ only a message
 \e[1;31mFATAL\e[0m
 \e[2ma=\e[0m1 \e[2mb=\e[0m"two words" \e[2mc=\e[0m[] \e[2md=\e[0m{}
 {}
-\e[2m12:00:03.000\e[0m \e[32mINFO\e[0m  multi\nline	message with \x1b[31mcolor\x1b[0m  \e[2mpath=\e[0m"C:\Program Files\app" \e[2mnote=\e[0m"привет мир"
+\e[2m12:00:03.000\e[0m \e[32mINFO\e[0m  multi\nline\tmessage with \x1b[31mcolor\x1b[0m  \e[2mpath=\e[0m"C:\Program Files\app" \e[2mnote=\e[0m"привет мир"
 \e[2m12:00:04.000\e[0m \e[32mINFO\e[0m  logfmt line  verbose \e[2mretries=\e[0m3 \e[2mempty=\e[0m"" \e[2mpath=\e[0m/tmp/x
 
 \e[2mTRACE\e[0m x

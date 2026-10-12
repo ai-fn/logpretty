@@ -6,6 +6,6 @@
 \e[2m10:00:02.123\e[0m \e[31mERROR\e[0m failed  \e[2merr=\e[0m"open /x: no such file or directory"
 \e[2m10:00:03.123\e[0m \e[32mINFO\e[0m  custom
 \e[2m10:00:04.123\e[0m \e[1;31mFATAL\e[0m down
-\e[2m10:00:05.123\e[0m \e[32mINFO\e[0m  tab	here \x1b[31mred\x1b[0m  \e[2mn=\e[0m1
+\e[2m10:00:05.123\e[0m \e[32mINFO\e[0m  tab\there \x1b[31mred\x1b[0m  \e[2mn=\e[0m1
 2026/10/11 12:00:00 INFO hello count=3
 2026/10/11 12:00:01 INFO hello \e[2ma=\e[0m1 \e[2mb=\e[0m2
