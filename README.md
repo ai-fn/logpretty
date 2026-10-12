@@ -32,6 +32,10 @@ kubectl logs -f pod | logpretty --level warn --where 'user_id=42' --fields msg,l
 > work. The filters (`--level`, `--where`, `--fields`) are not implemented yet, so the command
 > above is the target usage, not something you can run today.
 
+<p align="center">
+  <img src="assets/demo.svg" width="681" alt="logpretty output in a terminal: the time and the keys are faint, each level has its own style, a plain line is left as it is" />
+</p>
+
 ## Features
 
 | Feature | Status |
@@ -136,7 +140,7 @@ internal/render/      # formats an entry as a line of text and keeps control cha
 internal/term/        # decides whether to color the output: the -color mode, the terminal, NO_COLOR
 internal/golden/      # test helper: compares output with golden files
 testdata/script/      # end-to-end scenarios run against the real binary (testscript)
-assets/               # logo
+assets/               # logo, picture of the output
 .github/workflows/    # CI
 Makefile              # build, test, lint, fuzz, bench, vuln
 .golangci.yml         # golangci-lint v2 config
