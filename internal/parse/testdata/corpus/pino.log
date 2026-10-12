@@ -1,0 +1,5 @@
+{"level":30,"time":1791720000123,"pid":4242,"hostname":"web-1","req":{"method":"GET","url":"/x"},"res":{"statusCode":200},"responseTime":12,"msg":"request completed"}
+{"level":50,"time":1791720001123,"pid":4242,"hostname":"web-1","err":{"type":"Error","message":"x","stack":"Error: x\n    at f (/app/a.js:1:1)"},"msg":"boom"}
+{"level":10,"time":1791720002123,"pid":4242,"hostname":"web-1","msg":"trace"}
+{"level":60,"time":1791720003123,"pid":4242,"hostname":"web-1","msg":"fatal"}
+{"level":35,"time":1791720004123,"pid":4242,"hostname":"web-1","msg":"custom level"}

@@ -1,0 +1,28 @@
+line 1: plain
+  in: "panic: runtime error: index out of range [5] with length 3"
+line 2: plain
+  in: ""
+line 3: plain
+  in: "goroutine 1 [running]:"
+line 4: plain
+  in: "main.f(0xc000012345, 0x1)"
+line 5: plain
+  in: "\t/app/main.go:30 +0x45"
+line 6: plain
+  in: "main.main()"
+line 7: plain
+  in: "\t/app/main.go:12 +0x1d"
+line 8: plain
+  in: ""
+line 9: plain
+  in: "goroutine 7 [chan receive]:"
+line 10: plain
+  in: "main.worker()"
+line 11: plain
+  in: "\t/app/main.go:40 +0x2a"
+line 12: plain
+  in: "created by main.main in goroutine 1"
+line 13: plain
+  in: "\t/app/main.go:8 +0x2a"
+line 14: plain
+  in: "exit status 2"

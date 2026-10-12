@@ -1,0 +1,34 @@
+line 1: json
+  in: "2026-10-11T12:00:00.123456789Z {\"level\":\"info\",\"msg\":\"started\"}"
+  level: info
+  time: -
+  roles: time=- level=level msg=msg
+  prefix: "2026-10-11T12:00:00.123456789Z"
+  fields:
+    "level"=<string>"info"
+    "msg"=<string>"started"
+line 2: logfmt
+  in: "2026-10-11T12:00:01.000000000Z level=info msg=hello a=1"
+  level: info
+  time: -
+  roles: time=- level=level msg=msg
+  prefix: "2026-10-11T12:00:01.000000000Z"
+  fields:
+    "level"=<string>"info"
+    "msg"=<string>"hello"
+    "a"=<string>"1"
+line 3: plain
+  in: "2026-10-11T12:00:02.500000000Z plain message"
+line 4: json
+  in: "2026-10-11T12:00:03.000000000Z {\"level\":\"error\",\"msg\":\"boom\"}"
+  level: error
+  time: -
+  roles: time=- level=level msg=msg
+  prefix: "2026-10-11T12:00:03.000000000Z"
+  fields:
+    "level"=<string>"error"
+    "msg"=<string>"boom"
+line 5: plain
+  in: "[pod/web-1/app] {\"level\":\"info\",\"msg\":\"with --prefix\"}"
+line 6: plain
+  in: "[pod/web-1/app] 2026-10-11T12:00:04.000000000Z {\"level\":\"info\",\"msg\":\"with --prefix and --timestamps\"}"

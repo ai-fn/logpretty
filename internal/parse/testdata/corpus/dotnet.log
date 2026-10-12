@@ -1,0 +1,4 @@
+{"Timestamp":"2026-10-11T12:00:00.123Z","EventId":0,"LogLevel":"Information","Category":"Program","Message":"Started","State":{"Message":"Started","{OriginalFormat}":"Started"}}
+{"Timestamp":"2026-10-11T12:00:01.123Z","EventId":7,"LogLevel":"Error","Category":"Program","Message":"Failed","Exception":"System.Exception: boom"}
+info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://localhost:5000

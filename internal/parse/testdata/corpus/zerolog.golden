@@ -1,0 +1,41 @@
+line 1: json
+  in: "{\"level\":\"info\",\"time\":1791720000,\"message\":\"hello\"}"
+  level: info
+  time: 2026-10-11T12:00:00Z
+  roles: time=time level=level msg=message
+  fields:
+    "level"=<string>"info"
+    "time"=<number>"1791720000"
+    "message"=<string>"hello"
+line 2: json
+  in: "{\"level\":\"error\",\"error\":\"boom\",\"time\":\"2026-10-11T12:00:00Z\",\"message\":\"failed\"}"
+  level: error
+  time: 2026-10-11T12:00:00Z
+  roles: time=time level=level msg=message
+  fields:
+    "level"=<string>"error"
+    "error"=<string>"boom"
+    "time"=<string>"2026-10-11T12:00:00Z"
+    "message"=<string>"failed"
+line 3: json
+  in: "{\"level\":\"debug\",\"service\":\"api\",\"time\":\"2026-10-11T12:00:00.123+03:00\",\"caller\":\"main.go:10\",\"message\":\"cache miss\"}"
+  level: debug
+  time: 2026-10-11T09:00:00.123Z
+  roles: time=time level=level msg=message
+  fields:
+    "level"=<string>"debug"
+    "service"=<string>"api"
+    "time"=<string>"2026-10-11T12:00:00.123+03:00"
+    "caller"=<string>"main.go:10"
+    "message"=<string>"cache miss"
+line 4: json
+  in: "{\"level\":\"warn\",\"time\":1791720000123,\"message\":\"timestamps in milliseconds\"}"
+  level: warn
+  time: 2026-10-11T12:00:00.123Z
+  roles: time=time level=level msg=message
+  fields:
+    "level"=<string>"warn"
+    "time"=<number>"1791720000123"
+    "message"=<string>"timestamps in milliseconds"
+line 5: plain
+  in: "12:00PM INF server started port=8080"

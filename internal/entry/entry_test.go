@@ -68,3 +68,41 @@ func TestEntryResetDoesNotAllocate(t *testing.T) {
 		t.Errorf("Reset and reuse allocates %v times per call, want 0", allocs)
 	}
 }
+
+func TestFormatString(t *testing.T) {
+	tests := []struct {
+		format Format
+		want   string
+	}{
+		{FormatPlain, "plain"},
+		{FormatJSON, "json"},
+		{FormatLogfmt, "logfmt"},
+		{Format(200), "unknown"},
+	}
+	for _, tt := range tests {
+		if got := tt.format.String(); got != tt.want {
+			t.Errorf("Format(%d).String() = %q, want %q", tt.format, got, tt.want)
+		}
+	}
+}
+
+func TestKindString(t *testing.T) {
+	tests := []struct {
+		kind Kind
+		want string
+	}{
+		{KindNone, "none"},
+		{KindString, "string"},
+		{KindNumber, "number"},
+		{KindBool, "bool"},
+		{KindNull, "null"},
+		{KindObject, "object"},
+		{KindArray, "array"},
+		{Kind(200), "unknown"},
+	}
+	for _, tt := range tests {
+		if got := tt.kind.String(); got != tt.want {
+			t.Errorf("Kind(%d).String() = %q, want %q", tt.kind, got, tt.want)
+		}
+	}
+}

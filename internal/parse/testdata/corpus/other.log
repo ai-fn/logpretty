@@ -1,0 +1,5 @@
+{"version":"1.1","host":"web-1","short_message":"gelf message","timestamp":1791720000.123,"level":6}
+{"time":"2026-10-11T12:00:00Z","log_level":"warn","msg":"underscore key"}
+{"time":"2026-10-11T12:00:01Z","loglevel":"warn","msg":"joined key"}
+time="2026-10-11 12:00:03 +0000 UTC" level=info msg="go time.Time.String"
+<14>Oct 11 12:00:00 web-1 app[4242]: syslog line

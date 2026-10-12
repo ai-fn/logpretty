@@ -1,0 +1,7 @@
+{"level":"info","msg":"server started","port":8080,"time":"2026-10-11T12:00:00Z"}
+{"error":"connection refused","level":"error","msg":"dial failed","time":"2026-10-11T12:00:01+03:00"}
+time="2026-10-11T12:00:00Z" level=info msg="server started" port=8080
+time="2026-10-11T12:00:01Z" level=warning msg="disk \"almost\" full" used=91
+time="2026-10-11T12:00:02Z" level=error msg="write failed" error=EOF
+[36mINFO[0m[0000] server started                                [36mport[0m=8080
+[33mWARN[0m[0003] disk almost full                              [33mused[0m=91

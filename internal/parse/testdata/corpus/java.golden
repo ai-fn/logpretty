@@ -1,0 +1,29 @@
+line 1: plain
+  in: "2026-10-11 12:00:00,123 INFO  [main] com.example.App - Started App in 2.3 seconds"
+line 2: plain
+  in: "2026-10-11 12:00:01,456 ERROR [http-nio-8080-exec-1] c.e.Controller - Request failed"
+line 3: plain
+  in: "java.lang.NullPointerException: Cannot invoke \"String.length()\" because \"s\" is null"
+line 4: plain
+  in: "\tat com.example.Service.handle(Service.java:42)"
+line 5: plain
+  in: "\tat com.example.Controller.get(Controller.java:17)"
+line 6: plain
+  in: "Caused by: java.io.IOException: boom"
+line 7: plain
+  in: "\t... 12 more"
+line 8: plain
+  in: "2026-10-11T12:00:02.123+03:00  INFO 1234 --- [           main] c.e.App                                  : Started App in 2.3 seconds"
+line 9: json
+  in: "{\"@timestamp\":\"2026-10-11T12:00:03.123+03:00\",\"@version\":\"1\",\"message\":\"Started\",\"logger_name\":\"c.e.App\",\"thread_name\":\"main\",\"level\":\"INFO\",\"level_value\":20000}"
+  level: info
+  time: 2026-10-11T09:00:03.123Z
+  roles: time=@timestamp level=level msg=message
+  fields:
+    "@timestamp"=<string>"2026-10-11T12:00:03.123+03:00"
+    "@version"=<string>"1"
+    "message"=<string>"Started"
+    "logger_name"=<string>"c.e.App"
+    "thread_name"=<string>"main"
+    "level"=<string>"INFO"
+    "level_value"=<number>"20000"

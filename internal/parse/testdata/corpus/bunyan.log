@@ -1,0 +1,4 @@
+{"name":"app","hostname":"web-1","pid":4242,"level":30,"msg":"hello","time":"2026-10-11T12:00:00.123Z","v":0}
+{"name":"app","hostname":"web-1","pid":4242,"level":40,"msg":"careful","time":"2026-10-11T12:00:01.123Z","v":0}
+{"name":"app","hostname":"web-1","pid":4242,"level":20,"msg":"debugging","time":"2026-10-11T12:00:02.123Z","v":0}
+{"name":"app","hostname":"web-1","pid":4242,"level":50,"err":{"message":"x","name":"Error","stack":"Error: x\n    at f"},"msg":"boom","time":"2026-10-11T12:00:03.123Z","v":0}

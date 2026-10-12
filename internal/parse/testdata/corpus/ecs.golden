@@ -1,0 +1,35 @@
+line 1: json
+  in: "{\"@timestamp\":\"2026-10-11T12:00:00.123Z\",\"log.level\":\"info\",\"message\":\"started\",\"ecs.version\":\"1.6.0\",\"service.name\":\"api\",\"log\":{\"logger\":\"x\"}}"
+  level: info
+  time: 2026-10-11T12:00:00.123Z
+  roles: time=@timestamp level=log.level msg=message
+  fields:
+    "@timestamp"=<string>"2026-10-11T12:00:00.123Z"
+    "log.level"=<string>"info"
+    "message"=<string>"started"
+    "ecs.version"=<string>"1.6.0"
+    "service.name"=<string>"api"
+    "log"=<object>"{\"logger\":\"x\"}"
+line 2: json
+  in: "{\"@timestamp\":\"2026-10-11T12:00:01.123Z\",\"log.level\":\"error\",\"message\":\"boom\",\"error.message\":\"x\",\"error.stack_trace\":\"x\\n\\tat y\"}"
+  level: error
+  time: 2026-10-11T12:00:01.123Z
+  roles: time=@timestamp level=log.level msg=message
+  fields:
+    "@timestamp"=<string>"2026-10-11T12:00:01.123Z"
+    "log.level"=<string>"error"
+    "message"=<string>"boom"
+    "error.message"=<string>"x"
+    "error.stack_trace"=<string>"x\n\tat y"
+line 3: json
+  in: "{\"@timestamp\":\"2026-10-11T12:00:02.123Z\",\"log.level\":\"warn\",\"message\":\"slow\",\"log.logger\":\"x\",\"process.thread.name\":\"main\",\"ecs.version\":\"1.6.0\"}"
+  level: warn
+  time: 2026-10-11T12:00:02.123Z
+  roles: time=@timestamp level=log.level msg=message
+  fields:
+    "@timestamp"=<string>"2026-10-11T12:00:02.123Z"
+    "log.level"=<string>"warn"
+    "message"=<string>"slow"
+    "log.logger"=<string>"x"
+    "process.thread.name"=<string>"main"
+    "ecs.version"=<string>"1.6.0"

@@ -1,0 +1,35 @@
+line 1: json
+  in: "web-1    | {\"level\":\"info\",\"msg\":\"started\",\"time\":\"2026-10-11T12:00:00Z\"}"
+  level: info
+  time: 2026-10-11T12:00:00Z
+  roles: time=time level=level msg=msg
+  prefix: "web-1    |"
+  fields:
+    "level"=<string>"info"
+    "msg"=<string>"started"
+    "time"=<string>"2026-10-11T12:00:00Z"
+line 2: plain
+  in: "db-1     | 2026-10-11 12:00:00.123 UTC [1] LOG:  database system is ready to accept connections"
+line 3: logfmt
+  in: "web-1    | level=info msg=ready port=8080"
+  level: info
+  time: -
+  roles: time=- level=level msg=msg
+  prefix: "web-1    |"
+  fields:
+    "level"=<string>"info"
+    "msg"=<string>"ready"
+    "port"=<string>"8080"
+line 4: json
+  in: "worker-2 | 2026-10-11T12:00:00.123456789Z {\"level\":\"warn\",\"msg\":\"slow\"}"
+  level: warn
+  time: -
+  roles: time=- level=level msg=msg
+  prefix: "worker-2 | 2026-10-11T12:00:00.123456789Z"
+  fields:
+    "level"=<string>"warn"
+    "msg"=<string>"slow"
+line 5: plain
+  in: "web-1 exited with code 0"
+line 6: plain
+  in: "web-1    | "

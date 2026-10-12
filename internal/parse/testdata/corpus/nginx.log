@@ -1,0 +1,5 @@
+10.0.0.1 - - [11/Oct/2026:12:00:00 +0000] "GET /api/v1/users?id=5 HTTP/1.1" 200 1234 "-" "curl/8.4.0"
+10.0.0.1 - - [11/Oct/2026:12:00:01 +0000] "GET /search?q=a&b=c HTTP/1.1" 404 153 "https://example.com/?x=1" "Mozilla/5.0"
+2026/10/11 12:00:02 [error] 29#29: *1 open() "/usr/share/nginx/html/x" failed (2: No such file or directory), client: 10.0.0.1, server: _, request: "GET /x HTTP/1.1", host: "localhost"
+time=2026-10-11T12:00:03+00:00 remote=10.0.0.1 method=GET uri=/x status=200 bytes=12 rt=0.001
+{"time_iso8601":"2026-10-11T12:00:04+00:00","remote_addr":"10.0.0.1","request":"GET / HTTP/1.1","status":"200","request_time":"0.001"}

@@ -1,0 +1,53 @@
+line 1: json
+  in: "{\"name\":\"app\",\"hostname\":\"web-1\",\"pid\":4242,\"level\":30,\"msg\":\"hello\",\"time\":\"2026-10-11T12:00:00.123Z\",\"v\":0}"
+  level: info
+  time: 2026-10-11T12:00:00.123Z
+  roles: time=time level=level msg=msg
+  fields:
+    "name"=<string>"app"
+    "hostname"=<string>"web-1"
+    "pid"=<number>"4242"
+    "level"=<number>"30"
+    "msg"=<string>"hello"
+    "time"=<string>"2026-10-11T12:00:00.123Z"
+    "v"=<number>"0"
+line 2: json
+  in: "{\"name\":\"app\",\"hostname\":\"web-1\",\"pid\":4242,\"level\":40,\"msg\":\"careful\",\"time\":\"2026-10-11T12:00:01.123Z\",\"v\":0}"
+  level: warn
+  time: 2026-10-11T12:00:01.123Z
+  roles: time=time level=level msg=msg
+  fields:
+    "name"=<string>"app"
+    "hostname"=<string>"web-1"
+    "pid"=<number>"4242"
+    "level"=<number>"40"
+    "msg"=<string>"careful"
+    "time"=<string>"2026-10-11T12:00:01.123Z"
+    "v"=<number>"0"
+line 3: json
+  in: "{\"name\":\"app\",\"hostname\":\"web-1\",\"pid\":4242,\"level\":20,\"msg\":\"debugging\",\"time\":\"2026-10-11T12:00:02.123Z\",\"v\":0}"
+  level: debug
+  time: 2026-10-11T12:00:02.123Z
+  roles: time=time level=level msg=msg
+  fields:
+    "name"=<string>"app"
+    "hostname"=<string>"web-1"
+    "pid"=<number>"4242"
+    "level"=<number>"20"
+    "msg"=<string>"debugging"
+    "time"=<string>"2026-10-11T12:00:02.123Z"
+    "v"=<number>"0"
+line 4: json
+  in: "{\"name\":\"app\",\"hostname\":\"web-1\",\"pid\":4242,\"level\":50,\"err\":{\"message\":\"x\",\"name\":\"Error\",\"stack\":\"Error: x\\n    at f\"},\"msg\":\"boom\",\"time\":\"2026-10-11T12:00:03.123Z\",\"v\":0}"
+  level: error
+  time: 2026-10-11T12:00:03.123Z
+  roles: time=time level=level msg=msg
+  fields:
+    "name"=<string>"app"
+    "hostname"=<string>"web-1"
+    "pid"=<number>"4242"
+    "level"=<number>"50"
+    "err"=<object>"{\"message\":\"x\",\"name\":\"Error\",\"stack\":\"Error: x\\n    at f\"}"
+    "msg"=<string>"boom"
+    "time"=<string>"2026-10-11T12:00:03.123Z"
+    "v"=<number>"0"

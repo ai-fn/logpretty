@@ -1,0 +1,40 @@
+line 1: json
+  in: "{\"asctime\": \"2026-10-11 12:00:00,123\", \"levelname\": \"INFO\", \"name\": \"app\", \"message\": \"started\"}"
+  level: info
+  time: 2026-10-11T12:00:00.123Z
+  roles: time=asctime level=levelname msg=message
+  fields:
+    "asctime"=<string>"2026-10-11 12:00:00,123"
+    "levelname"=<string>"INFO"
+    "name"=<string>"app"
+    "message"=<string>"started"
+line 2: json
+  in: "{\"asctime\": \"2026-10-11 12:00:01,123\", \"levelname\": \"ERROR\", \"name\": \"app\", \"message\": \"failed\", \"exc_info\": \"Traceback (most recent call last):\\n  File \\\"a.py\\\", line 1\"}"
+  level: error
+  time: 2026-10-11T12:00:01.123Z
+  roles: time=asctime level=levelname msg=message
+  fields:
+    "asctime"=<string>"2026-10-11 12:00:01,123"
+    "levelname"=<string>"ERROR"
+    "name"=<string>"app"
+    "message"=<string>"failed"
+    "exc_info"=<string>"Traceback (most recent call last):\n  File \"a.py\", line 1"
+line 3: plain
+  in: "2026-10-11 12:00:02,123 - app - INFO - started"
+line 4: plain
+  in: "2026-10-11 12:00:03.123 | INFO     | app:main:10 - started"
+line 5: logfmt
+  in: "2026-10-11T12:00:04.123456Z [info     ] user logged in                 [app] user_id=5 ip=1.2.3.4"
+  level: unknown
+  time: -
+  roles: time=- level=- msg=-
+  prefix: "2026-10-11T12:00:04.123456Z [info     ] user logged in                 [app]"
+  fields:
+    "user_id"=<string>"5"
+    "ip"=<string>"1.2.3.4"
+line 6: plain
+  in: "Traceback (most recent call last):"
+line 7: plain
+  in: "  File \"a.py\", line 1, in <module>"
+line 8: plain
+  in: "ValueError: boom"

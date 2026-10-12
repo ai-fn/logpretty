@@ -1,0 +1,54 @@
+line 1: json
+  in: "{\"level\":\"info\",\"msg\":\"server started\",\"port\":8080,\"time\":\"2026-10-11T12:00:00Z\"}"
+  level: info
+  time: 2026-10-11T12:00:00Z
+  roles: time=time level=level msg=msg
+  fields:
+    "level"=<string>"info"
+    "msg"=<string>"server started"
+    "port"=<number>"8080"
+    "time"=<string>"2026-10-11T12:00:00Z"
+line 2: json
+  in: "{\"error\":\"connection refused\",\"level\":\"error\",\"msg\":\"dial failed\",\"time\":\"2026-10-11T12:00:01+03:00\"}"
+  level: error
+  time: 2026-10-11T09:00:01Z
+  roles: time=time level=level msg=msg
+  fields:
+    "error"=<string>"connection refused"
+    "level"=<string>"error"
+    "msg"=<string>"dial failed"
+    "time"=<string>"2026-10-11T12:00:01+03:00"
+line 3: logfmt
+  in: "time=\"2026-10-11T12:00:00Z\" level=info msg=\"server started\" port=8080"
+  level: info
+  time: 2026-10-11T12:00:00Z
+  roles: time=time level=level msg=msg
+  fields:
+    "time"=<string>"2026-10-11T12:00:00Z"
+    "level"=<string>"info"
+    "msg"=<string>"server started"
+    "port"=<string>"8080"
+line 4: logfmt
+  in: "time=\"2026-10-11T12:00:01Z\" level=warning msg=\"disk \\\"almost\\\" full\" used=91"
+  level: warn
+  time: 2026-10-11T12:00:01Z
+  roles: time=time level=level msg=msg
+  fields:
+    "time"=<string>"2026-10-11T12:00:01Z"
+    "level"=<string>"warning"
+    "msg"=<string>"disk \"almost\" full"
+    "used"=<string>"91"
+line 5: logfmt
+  in: "time=\"2026-10-11T12:00:02Z\" level=error msg=\"write failed\" error=EOF"
+  level: error
+  time: 2026-10-11T12:00:02Z
+  roles: time=time level=level msg=msg
+  fields:
+    "time"=<string>"2026-10-11T12:00:02Z"
+    "level"=<string>"error"
+    "msg"=<string>"write failed"
+    "error"=<string>"EOF"
+line 6: plain
+  in: "\x1b[36mINFO\x1b[0m[0000] server started                                \x1b[36mport\x1b[0m=8080"
+line 7: plain
+  in: "\x1b[33mWARN\x1b[0m[0003] disk almost full                              \x1b[33mused\x1b[0m=91"

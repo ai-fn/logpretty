@@ -19,3 +19,10 @@ indent_style = tab
 
 [*.md]
 trim_trailing_whitespace = false
+
+[{testdata/**,**/testdata/**}]
+trim_trailing_whitespace = false
+insert_final_newline = unset
+end_of_line = unset
+charset = unset
+indent_style = unset

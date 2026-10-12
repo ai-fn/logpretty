@@ -1,0 +1,28 @@
+line 1: json
+  in: "{\"Timestamp\":\"2026-10-11T12:00:00.123Z\",\"EventId\":0,\"LogLevel\":\"Information\",\"Category\":\"Program\",\"Message\":\"Started\",\"State\":{\"Message\":\"Started\",\"{OriginalFormat}\":\"Started\"}}"
+  level: info
+  time: 2026-10-11T12:00:00.123Z
+  roles: time=Timestamp level=LogLevel msg=Message
+  fields:
+    "Timestamp"=<string>"2026-10-11T12:00:00.123Z"
+    "EventId"=<number>"0"
+    "LogLevel"=<string>"Information"
+    "Category"=<string>"Program"
+    "Message"=<string>"Started"
+    "State"=<object>"{\"Message\":\"Started\",\"{OriginalFormat}\":\"Started\"}"
+line 2: json
+  in: "{\"Timestamp\":\"2026-10-11T12:00:01.123Z\",\"EventId\":7,\"LogLevel\":\"Error\",\"Category\":\"Program\",\"Message\":\"Failed\",\"Exception\":\"System.Exception: boom\"}"
+  level: error
+  time: 2026-10-11T12:00:01.123Z
+  roles: time=Timestamp level=LogLevel msg=Message
+  fields:
+    "Timestamp"=<string>"2026-10-11T12:00:01.123Z"
+    "EventId"=<number>"7"
+    "LogLevel"=<string>"Error"
+    "Category"=<string>"Program"
+    "Message"=<string>"Failed"
+    "Exception"=<string>"System.Exception: boom"
+line 3: plain
+  in: "info: Microsoft.Hosting.Lifetime[14]"
+line 4: plain
+  in: "      Now listening on: http://localhost:5000"

@@ -1,0 +1,3 @@
+{"@timestamp":"2026-10-11T12:00:00.123Z","log.level":"info","message":"started","ecs.version":"1.6.0","service.name":"api","log":{"logger":"x"}}
+{"@timestamp":"2026-10-11T12:00:01.123Z","log.level":"error","message":"boom","error.message":"x","error.stack_trace":"x\n\tat y"}
+{"@timestamp":"2026-10-11T12:00:02.123Z","log.level":"warn","message":"slow","log.logger":"x","process.thread.name":"main","ecs.version":"1.6.0"}

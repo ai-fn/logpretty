@@ -1,0 +1,5 @@
+{"level":"info","ts":1791720000.123456,"caller":"server/main.go:42","msg":"server started","addr":":8080"}
+{"level":"error","ts":1791720001.5,"caller":"db/pool.go:88","msg":"query failed","error":"context deadline exceeded","stacktrace":"main.run\n\t/app/main.go:30\nmain.main\n\t/app/main.go:12"}
+{"level":"warn","ts":"2026-10-11T12:00:02.000Z","logger":"api.http","msg":"slow request","latency":1.5,"path":"/api/v1/users"}
+{"level":"dpanic","ts":1791720003,"msg":"invariant broken","count":0,"ok":false,"extra":null}
+2026-10-11T12:00:00.123Z	INFO	server/main.go:42	server started	{"addr": ":8080"}

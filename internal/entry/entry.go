@@ -13,6 +13,15 @@ const (
 	FormatLogfmt
 )
 
+var formatNames = [...]string{"plain", "json", "logfmt"}
+
+func (f Format) String() string {
+	if int(f) >= len(formatNames) {
+		return "unknown"
+	}
+	return formatNames[f]
+}
+
 // Kind is the type of a field value.
 type Kind uint8
 
@@ -26,6 +35,15 @@ const (
 	KindObject
 	KindArray
 )
+
+var kindNames = [...]string{"none", "string", "number", "bool", "null", "object", "array"}
+
+func (k Kind) String() string {
+	if int(k) >= len(kindNames) {
+		return "unknown"
+	}
+	return kindNames[k]
+}
 
 // Value is a field value that still points into the line it came from.
 type Value struct {

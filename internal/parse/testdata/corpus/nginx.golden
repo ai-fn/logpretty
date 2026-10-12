@@ -1,0 +1,30 @@
+line 1: plain
+  in: "10.0.0.1 - - [11/Oct/2026:12:00:00 +0000] \"GET /api/v1/users?id=5 HTTP/1.1\" 200 1234 \"-\" \"curl/8.4.0\""
+line 2: plain
+  in: "10.0.0.1 - - [11/Oct/2026:12:00:01 +0000] \"GET /search?q=a&b=c HTTP/1.1\" 404 153 \"https://example.com/?x=1\" \"Mozilla/5.0\""
+line 3: plain
+  in: "2026/10/11 12:00:02 [error] 29#29: *1 open() \"/usr/share/nginx/html/x\" failed (2: No such file or directory), client: 10.0.0.1, server: _, request: \"GET /x HTTP/1.1\", host: \"localhost\""
+line 4: logfmt
+  in: "time=2026-10-11T12:00:03+00:00 remote=10.0.0.1 method=GET uri=/x status=200 bytes=12 rt=0.001"
+  level: unknown
+  time: 2026-10-11T12:00:03Z
+  roles: time=time level=- msg=-
+  fields:
+    "time"=<string>"2026-10-11T12:00:03+00:00"
+    "remote"=<string>"10.0.0.1"
+    "method"=<string>"GET"
+    "uri"=<string>"/x"
+    "status"=<string>"200"
+    "bytes"=<string>"12"
+    "rt"=<string>"0.001"
+line 5: json
+  in: "{\"time_iso8601\":\"2026-10-11T12:00:04+00:00\",\"remote_addr\":\"10.0.0.1\",\"request\":\"GET / HTTP/1.1\",\"status\":\"200\",\"request_time\":\"0.001\"}"
+  level: unknown
+  time: -
+  roles: time=- level=- msg=-
+  fields:
+    "time_iso8601"=<string>"2026-10-11T12:00:04+00:00"
+    "remote_addr"=<string>"10.0.0.1"
+    "request"=<string>"GET / HTTP/1.1"
+    "status"=<string>"200"
+    "request_time"=<string>"0.001"

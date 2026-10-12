@@ -1,0 +1,59 @@
+line 1: json
+  in: "{\"level\":30,\"time\":1791720000123,\"pid\":4242,\"hostname\":\"web-1\",\"req\":{\"method\":\"GET\",\"url\":\"/x\"},\"res\":{\"statusCode\":200},\"responseTime\":12,\"msg\":\"request completed\"}"
+  level: info
+  time: 2026-10-11T12:00:00.123Z
+  roles: time=time level=level msg=msg
+  fields:
+    "level"=<number>"30"
+    "time"=<number>"1791720000123"
+    "pid"=<number>"4242"
+    "hostname"=<string>"web-1"
+    "req"=<object>"{\"method\":\"GET\",\"url\":\"/x\"}"
+    "res"=<object>"{\"statusCode\":200}"
+    "responseTime"=<number>"12"
+    "msg"=<string>"request completed"
+line 2: json
+  in: "{\"level\":50,\"time\":1791720001123,\"pid\":4242,\"hostname\":\"web-1\",\"err\":{\"type\":\"Error\",\"message\":\"x\",\"stack\":\"Error: x\\n    at f (/app/a.js:1:1)\"},\"msg\":\"boom\"}"
+  level: error
+  time: 2026-10-11T12:00:01.123Z
+  roles: time=time level=level msg=msg
+  fields:
+    "level"=<number>"50"
+    "time"=<number>"1791720001123"
+    "pid"=<number>"4242"
+    "hostname"=<string>"web-1"
+    "err"=<object>"{\"type\":\"Error\",\"message\":\"x\",\"stack\":\"Error: x\\n    at f (/app/a.js:1:1)\"}"
+    "msg"=<string>"boom"
+line 3: json
+  in: "{\"level\":10,\"time\":1791720002123,\"pid\":4242,\"hostname\":\"web-1\",\"msg\":\"trace\"}"
+  level: trace
+  time: 2026-10-11T12:00:02.123Z
+  roles: time=time level=level msg=msg
+  fields:
+    "level"=<number>"10"
+    "time"=<number>"1791720002123"
+    "pid"=<number>"4242"
+    "hostname"=<string>"web-1"
+    "msg"=<string>"trace"
+line 4: json
+  in: "{\"level\":60,\"time\":1791720003123,\"pid\":4242,\"hostname\":\"web-1\",\"msg\":\"fatal\"}"
+  level: fatal
+  time: 2026-10-11T12:00:03.123Z
+  roles: time=time level=level msg=msg
+  fields:
+    "level"=<number>"60"
+    "time"=<number>"1791720003123"
+    "pid"=<number>"4242"
+    "hostname"=<string>"web-1"
+    "msg"=<string>"fatal"
+line 5: json
+  in: "{\"level\":35,\"time\":1791720004123,\"pid\":4242,\"hostname\":\"web-1\",\"msg\":\"custom level\"}"
+  level: unknown
+  time: 2026-10-11T12:00:04.123Z
+  roles: time=time level=- msg=msg
+  fields:
+    "level"=<number>"35"
+    "time"=<number>"1791720004123"
+    "pid"=<number>"4242"
+    "hostname"=<string>"web-1"
+    "msg"=<string>"custom level"

@@ -1,0 +1,49 @@
+line 1: json
+  in: "{\"level\":\"info\",\"ts\":1791720000.123456,\"caller\":\"server/main.go:42\",\"msg\":\"server started\",\"addr\":\":8080\"}"
+  level: info
+  time: 2026-10-11T12:00:00.123456Z
+  roles: time=ts level=level msg=msg
+  fields:
+    "level"=<string>"info"
+    "ts"=<number>"1791720000.123456"
+    "caller"=<string>"server/main.go:42"
+    "msg"=<string>"server started"
+    "addr"=<string>":8080"
+line 2: json
+  in: "{\"level\":\"error\",\"ts\":1791720001.5,\"caller\":\"db/pool.go:88\",\"msg\":\"query failed\",\"error\":\"context deadline exceeded\",\"stacktrace\":\"main.run\\n\\t/app/main.go:30\\nmain.main\\n\\t/app/main.go:12\"}"
+  level: error
+  time: 2026-10-11T12:00:01.5Z
+  roles: time=ts level=level msg=msg
+  fields:
+    "level"=<string>"error"
+    "ts"=<number>"1791720001.5"
+    "caller"=<string>"db/pool.go:88"
+    "msg"=<string>"query failed"
+    "error"=<string>"context deadline exceeded"
+    "stacktrace"=<string>"main.run\n\t/app/main.go:30\nmain.main\n\t/app/main.go:12"
+line 3: json
+  in: "{\"level\":\"warn\",\"ts\":\"2026-10-11T12:00:02.000Z\",\"logger\":\"api.http\",\"msg\":\"slow request\",\"latency\":1.5,\"path\":\"/api/v1/users\"}"
+  level: warn
+  time: 2026-10-11T12:00:02Z
+  roles: time=ts level=level msg=msg
+  fields:
+    "level"=<string>"warn"
+    "ts"=<string>"2026-10-11T12:00:02.000Z"
+    "logger"=<string>"api.http"
+    "msg"=<string>"slow request"
+    "latency"=<number>"1.5"
+    "path"=<string>"/api/v1/users"
+line 4: json
+  in: "{\"level\":\"dpanic\",\"ts\":1791720003,\"msg\":\"invariant broken\",\"count\":0,\"ok\":false,\"extra\":null}"
+  level: fatal
+  time: 2026-10-11T12:00:03Z
+  roles: time=ts level=level msg=msg
+  fields:
+    "level"=<string>"dpanic"
+    "ts"=<number>"1791720003"
+    "msg"=<string>"invariant broken"
+    "count"=<number>"0"
+    "ok"=<bool>"false"
+    "extra"=<null>"null"
+line 5: plain
+  in: "2026-10-11T12:00:00.123Z\tINFO\tserver/main.go:42\tserver started\t{\"addr\": \":8080\"}"

@@ -1,0 +1,6 @@
+2026-10-11T12:00:00.123456789Z {"level":"info","msg":"started"}
+2026-10-11T12:00:01.000000000Z level=info msg=hello a=1
+2026-10-11T12:00:02.500000000Z plain message
+2026-10-11T12:00:03.000000000Z {"level":"error","msg":"boom"}
+[pod/web-1/app] {"level":"info","msg":"with --prefix"}
+[pod/web-1/app] 2026-10-11T12:00:04.000000000Z {"level":"info","msg":"with --prefix and --timestamps"}

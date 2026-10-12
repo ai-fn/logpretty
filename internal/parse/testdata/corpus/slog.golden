@@ -1,0 +1,100 @@
+line 1: json
+  in: "{\"time\":\"2026-10-11T12:00:00.123456789+02:00\",\"level\":\"INFO\",\"msg\":\"hello\",\"count\":3}"
+  level: info
+  time: 2026-10-11T10:00:00.123456789Z
+  roles: time=time level=level msg=msg
+  fields:
+    "time"=<string>"2026-10-11T12:00:00.123456789+02:00"
+    "level"=<string>"INFO"
+    "msg"=<string>"hello"
+    "count"=<number>"3"
+line 2: json
+  in: "{\"time\":\"2026-10-11T12:00:01+02:00\",\"level\":\"ERROR\",\"source\":{\"function\":\"main.main\",\"file\":\"/app/main.go\",\"line\":12},\"msg\":\"failed\",\"err\":\"EOF\"}"
+  level: error
+  time: 2026-10-11T10:00:01Z
+  roles: time=time level=level msg=msg
+  fields:
+    "time"=<string>"2026-10-11T12:00:01+02:00"
+    "level"=<string>"ERROR"
+    "source"=<object>"{\"function\":\"main.main\",\"file\":\"/app/main.go\",\"line\":12}"
+    "msg"=<string>"failed"
+    "err"=<string>"EOF"
+line 3: json
+  in: "{\"time\":\"2026-10-11T12:00:02+02:00\",\"level\":\"DEBUG-4\",\"msg\":\"below debug\"}"
+  level: trace
+  time: 2026-10-11T10:00:02Z
+  roles: time=time level=level msg=msg
+  fields:
+    "time"=<string>"2026-10-11T12:00:02+02:00"
+    "level"=<string>"DEBUG-4"
+    "msg"=<string>"below debug"
+line 4: logfmt
+  in: "time=2026-10-11T12:00:00.123+02:00 level=INFO msg=hello count=3"
+  level: info
+  time: 2026-10-11T10:00:00.123Z
+  roles: time=time level=level msg=msg
+  fields:
+    "time"=<string>"2026-10-11T12:00:00.123+02:00"
+    "level"=<string>"INFO"
+    "msg"=<string>"hello"
+    "count"=<string>"3"
+line 5: logfmt
+  in: "time=2026-10-11T12:00:01.123+02:00 level=WARN msg=\"slow request\" duration=1.5s path=/api/v1/users"
+  level: warn
+  time: 2026-10-11T10:00:01.123Z
+  roles: time=time level=level msg=msg
+  fields:
+    "time"=<string>"2026-10-11T12:00:01.123+02:00"
+    "level"=<string>"WARN"
+    "msg"=<string>"slow request"
+    "duration"=<string>"1.5s"
+    "path"=<string>"/api/v1/users"
+line 6: logfmt
+  in: "time=2026-10-11T12:00:02.123+02:00 level=ERROR msg=failed err=\"open /x: no such file or directory\""
+  level: error
+  time: 2026-10-11T10:00:02.123Z
+  roles: time=time level=level msg=msg
+  fields:
+    "time"=<string>"2026-10-11T12:00:02.123+02:00"
+    "level"=<string>"ERROR"
+    "msg"=<string>"failed"
+    "err"=<string>"open /x: no such file or directory"
+line 7: logfmt
+  in: "time=2026-10-11T12:00:03.123+02:00 level=INFO+2 msg=custom"
+  level: info
+  time: 2026-10-11T10:00:03.123Z
+  roles: time=time level=level msg=msg
+  fields:
+    "time"=<string>"2026-10-11T12:00:03.123+02:00"
+    "level"=<string>"INFO+2"
+    "msg"=<string>"custom"
+line 8: logfmt
+  in: "time=2026-10-11T12:00:04.123+02:00 level=ERROR+4 msg=down"
+  level: fatal
+  time: 2026-10-11T10:00:04.123Z
+  roles: time=time level=level msg=msg
+  fields:
+    "time"=<string>"2026-10-11T12:00:04.123+02:00"
+    "level"=<string>"ERROR+4"
+    "msg"=<string>"down"
+line 9: logfmt
+  in: "time=2026-10-11T12:00:05.123+02:00 level=INFO msg=\"tab\\there \\x1b[31mred\\x1b[0m\" n=1"
+  level: info
+  time: 2026-10-11T10:00:05.123Z
+  roles: time=time level=level msg=msg
+  fields:
+    "time"=<string>"2026-10-11T12:00:05.123+02:00"
+    "level"=<string>"INFO"
+    "msg"=<string>"tab\there \\x1b[31mred\\x1b[0m"
+    "n"=<string>"1"
+line 10: plain
+  in: "2026/10/11 12:00:00 INFO hello count=3"
+line 11: logfmt
+  in: "2026/10/11 12:00:01 INFO hello a=1 b=2"
+  level: unknown
+  time: -
+  roles: time=- level=- msg=-
+  prefix: "2026/10/11 12:00:01 INFO hello"
+  fields:
+    "a"=<string>"1"
+    "b"=<string>"2"

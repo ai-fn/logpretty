@@ -1,0 +1,40 @@
+line 1: json
+  in: "{\"version\":\"1.1\",\"host\":\"web-1\",\"short_message\":\"gelf message\",\"timestamp\":1791720000.123,\"level\":6}"
+  level: unknown
+  time: 2026-10-11T12:00:00.123Z
+  roles: time=timestamp level=- msg=-
+  fields:
+    "version"=<string>"1.1"
+    "host"=<string>"web-1"
+    "short_message"=<string>"gelf message"
+    "timestamp"=<number>"1791720000.123"
+    "level"=<number>"6"
+line 2: json
+  in: "{\"time\":\"2026-10-11T12:00:00Z\",\"log_level\":\"warn\",\"msg\":\"underscore key\"}"
+  level: warn
+  time: 2026-10-11T12:00:00Z
+  roles: time=time level=log_level msg=msg
+  fields:
+    "time"=<string>"2026-10-11T12:00:00Z"
+    "log_level"=<string>"warn"
+    "msg"=<string>"underscore key"
+line 3: json
+  in: "{\"time\":\"2026-10-11T12:00:01Z\",\"loglevel\":\"warn\",\"msg\":\"joined key\"}"
+  level: warn
+  time: 2026-10-11T12:00:01Z
+  roles: time=time level=loglevel msg=msg
+  fields:
+    "time"=<string>"2026-10-11T12:00:01Z"
+    "loglevel"=<string>"warn"
+    "msg"=<string>"joined key"
+line 4: logfmt
+  in: "time=\"2026-10-11 12:00:03 +0000 UTC\" level=info msg=\"go time.Time.String\""
+  level: info
+  time: -
+  roles: time=- level=level msg=msg
+  fields:
+    "time"=<string>"2026-10-11 12:00:03 +0000 UTC"
+    "level"=<string>"info"
+    "msg"=<string>"go time.Time.String"
+line 5: plain
+  in: "<14>Oct 11 12:00:00 web-1 app[4242]: syslog line"

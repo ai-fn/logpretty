@@ -1,0 +1,26 @@
+line 1: logfmt
+  in: "method=GET path=/users format=html controller=UsersController action=index status=200 duration=12.34 view=5.6 db=1.2"
+  level: unknown
+  time: -
+  roles: time=- level=- msg=-
+  fields:
+    "method"=<string>"GET"
+    "path"=<string>"/users"
+    "format"=<string>"html"
+    "controller"=<string>"UsersController"
+    "action"=<string>"index"
+    "status"=<string>"200"
+    "duration"=<string>"12.34"
+    "view"=<string>"5.6"
+    "db"=<string>"1.2"
+line 2: json
+  in: "{\"timestamp\":\"2026-10-11 12:00:00 +0000\",\"level\":\"info\",\"msg\":\"ruby time\"}"
+  level: info
+  time: 2026-10-11T12:00:00Z
+  roles: time=timestamp level=level msg=msg
+  fields:
+    "timestamp"=<string>"2026-10-11 12:00:00 +0000"
+    "level"=<string>"info"
+    "msg"=<string>"ruby time"
+line 3: plain
+  in: "I, [2026-10-11T12:00:02.123456 #4242]  INFO -- : started"

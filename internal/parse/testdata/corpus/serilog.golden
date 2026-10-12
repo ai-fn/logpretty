@@ -1,0 +1,50 @@
+line 1: json
+  in: "{\"@t\":\"2026-10-11T12:00:00.1234567Z\",\"@mt\":\"User {Name} logged in\",\"Name\":\"bob\"}"
+  level: unknown
+  time: 2026-10-11T12:00:00.1234567Z
+  roles: time=@t level=- msg=@mt
+  fields:
+    "@t"=<string>"2026-10-11T12:00:00.1234567Z"
+    "@mt"=<string>"User {Name} logged in"
+    "Name"=<string>"bob"
+line 2: json
+  in: "{\"@t\":\"2026-10-11T12:00:01.1234567Z\",\"@m\":\"Disk 91% full\",\"@i\":\"1a2b3c4d\",\"@l\":\"Warning\",\"Used\":91}"
+  level: warn
+  time: 2026-10-11T12:00:01.1234567Z
+  roles: time=@t level=@l msg=@m
+  fields:
+    "@t"=<string>"2026-10-11T12:00:01.1234567Z"
+    "@m"=<string>"Disk 91% full"
+    "@i"=<string>"1a2b3c4d"
+    "@l"=<string>"Warning"
+    "Used"=<number>"91"
+line 3: json
+  in: "{\"@t\":\"2026-10-11T12:00:02.1234567Z\",\"@mt\":\"Request failed\",\"@l\":\"Error\",\"@x\":\"System.Exception: boom\\n   at App.Run() in /app/Program.cs:line 12\"}"
+  level: error
+  time: 2026-10-11T12:00:02.1234567Z
+  roles: time=@t level=@l msg=@mt
+  fields:
+    "@t"=<string>"2026-10-11T12:00:02.1234567Z"
+    "@mt"=<string>"Request failed"
+    "@l"=<string>"Error"
+    "@x"=<string>"System.Exception: boom\n   at App.Run() in /app/Program.cs:line 12"
+line 4: json
+  in: "{\"@t\":\"2026-10-11T12:00:03.1234567Z\",\"@mt\":\"Starting\",\"@l\":\"Verbose\"}"
+  level: trace
+  time: 2026-10-11T12:00:03.1234567Z
+  roles: time=@t level=@l msg=@mt
+  fields:
+    "@t"=<string>"2026-10-11T12:00:03.1234567Z"
+    "@mt"=<string>"Starting"
+    "@l"=<string>"Verbose"
+line 5: json
+  in: "{\"Timestamp\":\"2026-10-11T12:00:04.1234567+00:00\",\"Level\":\"Information\",\"MessageTemplate\":\"Hello {Name}\",\"RenderedMessage\":\"Hello \\\"bob\\\"\",\"Properties\":{\"Name\":\"bob\"}}"
+  level: info
+  time: 2026-10-11T12:00:04.1234567Z
+  roles: time=Timestamp level=Level msg=-
+  fields:
+    "Timestamp"=<string>"2026-10-11T12:00:04.1234567+00:00"
+    "Level"=<string>"Information"
+    "MessageTemplate"=<string>"Hello {Name}"
+    "RenderedMessage"=<string>"Hello \"bob\""
+    "Properties"=<object>"{\"Name\":\"bob\"}"

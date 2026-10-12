@@ -1,0 +1,5 @@
+{"@t":"2026-10-11T12:00:00.1234567Z","@mt":"User {Name} logged in","Name":"bob"}
+{"@t":"2026-10-11T12:00:01.1234567Z","@m":"Disk 91% full","@i":"1a2b3c4d","@l":"Warning","Used":91}
+{"@t":"2026-10-11T12:00:02.1234567Z","@mt":"Request failed","@l":"Error","@x":"System.Exception: boom\n   at App.Run() in /app/Program.cs:line 12"}
+{"@t":"2026-10-11T12:00:03.1234567Z","@mt":"Starting","@l":"Verbose"}
+{"Timestamp":"2026-10-11T12:00:04.1234567+00:00","Level":"Information","MessageTemplate":"Hello {Name}","RenderedMessage":"Hello \"bob\"","Properties":{"Name":"bob"}}

@@ -1,0 +1,5 @@
+{"level":"info","time":1791720000,"message":"hello"}
+{"level":"error","error":"boom","time":"2026-10-11T12:00:00Z","message":"failed"}
+{"level":"debug","service":"api","time":"2026-10-11T12:00:00.123+03:00","caller":"main.go:10","message":"cache miss"}
+{"level":"warn","time":1791720000123,"message":"timestamps in milliseconds"}
+12:00PM INF server started port=8080
