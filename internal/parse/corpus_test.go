@@ -2,7 +2,6 @@ package parse
 
 import (
 	"bytes"
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,9 +11,8 @@ import (
 	"time"
 
 	"github.com/ai-fn/logpretty/internal/entry"
+	"github.com/ai-fn/logpretty/internal/golden"
 )
-
-var update = flag.Bool("update", false, "rewrite the golden files of the corpus")
 
 func dumpEntry(b *strings.Builder, n int, line []byte, e *entry.Entry) {
 	fmt.Fprintf(b, "line %d: %s\n  in: %q\n", n, e.Format, line)
@@ -47,28 +45,6 @@ func dumpEntry(b *strings.Builder, n int, line []byte, e *entry.Entry) {
 	}
 }
 
-// firstDifference names the log line where two dumps part, so that a failure points at it.
-func firstDifference(got, want string) string {
-	gotLines, wantLines := strings.Split(got, "\n"), strings.Split(want, "\n")
-	header := "the start"
-	for i := range max(len(gotLines), len(wantLines)) {
-		// A dump that ends sooner differs from one with an empty line there.
-		if i >= len(gotLines) || i >= len(wantLines) || gotLines[i] != wantLines[i] {
-			side := func(lines []string) string {
-				if i >= len(lines) {
-					return "(end)"
-				}
-				return fmt.Sprintf("%q", lines[i])
-			}
-			return fmt.Sprintf("first difference after %q\n got: %s\nwant: %s", header, side(gotLines), side(wantLines))
-		}
-		if strings.HasPrefix(gotLines[i], "line ") {
-			header = gotLines[i]
-		}
-	}
-	return "no difference"
-}
-
 // TestCorpus compares the parsed corpus with its golden files; after a change of the heuristics read the
 // diff, then rewrite them with "go test ./internal/parse -run TestCorpus -update".
 func TestCorpus(t *testing.T) {
@@ -79,16 +55,9 @@ func TestCorpus(t *testing.T) {
 	if len(logs) == 0 {
 		t.Fatal("no corpus files found")
 	}
-	// A golden file whose log was renamed or deleted would stay unchecked for good.
-	goldens, err := filepath.Glob(filepath.Join("testdata", "corpus", "*.golden"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, golden := range goldens {
-		if !slices.Contains(logs, strings.TrimSuffix(golden, ".golden")+".log") {
-			t.Errorf("%s has no log file next to it", golden)
-		}
-	}
+	golden.CheckOrphans(t, filepath.Join("testdata", "corpus", "*.golden"), func(path string) bool {
+		return slices.Contains(logs, strings.TrimSuffix(path, ".golden")+".log")
+	})
 
 	for _, path := range logs {
 		name := strings.TrimSuffix(filepath.Base(path), ".log")
@@ -109,20 +78,7 @@ func TestCorpus(t *testing.T) {
 				dumpEntry(&got, i+1, line, p.Parse(slices.Clip(line)))
 			}
 
-			golden := strings.TrimSuffix(path, ".log") + ".golden"
-			if *update {
-				if err := os.WriteFile(golden, []byte(got.String()), 0o644); err != nil {
-					t.Fatal(err)
-				}
-				return
-			}
-			want, err := os.ReadFile(golden)
-			if err != nil {
-				t.Fatalf("%v (create it with -update)", err)
-			}
-			if got.String() != string(want) {
-				t.Errorf("%s differs from the golden file\n%s", name, firstDifference(got.String(), string(want)))
-			}
+			golden.Check(t, strings.TrimSuffix(path, ".log")+".golden", []byte(got.String()))
 		})
 	}
 }

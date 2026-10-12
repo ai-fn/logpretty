@@ -8,6 +8,16 @@ linters:
     - gocritic
     - perfsprint
     - prealloc
+    - depguard
+  settings:
+    depguard:
+      rules:
+        test-helpers:
+          files:
+            - "!$test"
+          deny:
+            - pkg: github.com/ai-fn/logpretty/internal/golden
+              desc: a test helper that registers the -update flag; import it from _test.go files only
 
 formatters:
   enable:
