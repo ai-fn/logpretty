@@ -4,13 +4,13 @@ Pretty-print JSON, logfmt and plain-text logs read from stdin. The format of
 every line is detected on its own, so mixed streams need no flags.
 
 Flags:
-      --color WHEN   color the output: auto (only on a terminal, the default),
-                     always or never
-      --utc          show times in UTC instead of the local time zone
-      --max-line N   longest line to keep, in bytes (default 1048576); the rest
-                     of a longer line is dropped
-      --version      print the version
-  -h, --help         print this help
+      --color WHEN      color the output: auto (only on a terminal, the
+                        default), always or never
+      --utc             show times in UTC instead of the local time zone
+      --max-line SIZE   longest line to keep, in bytes or with K, M or G
+                        (default 1M); the rest of a longer line is dropped
+      --version         print the version
+  -h, --help            print this help
 
 Examples:
   kubectl logs -f pod | logpretty

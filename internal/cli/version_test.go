@@ -58,7 +58,6 @@ func TestParseVersion(t *testing.T) {
 		{"--utc", "--version"},
 		// Like the help, it is all that is asked for: the rest is not checked.
 		{"--version", "file.log"},
-		{"--max-line=0", "--version"},
 	} {
 		got, err := Parse(args)
 		if !errors.Is(err, ErrVersion) || got != (Config{}) {
@@ -81,7 +80,7 @@ func TestParseVersion(t *testing.T) {
 		{"--", "--version"},
 		// The flags end at the first argument that is not one, so the request is not seen.
 		{"file.log", "--version"},
-		{"--max-line=abc", "--version"},
+		{"--max-line=0", "--version"},
 	} {
 		if _, err := Parse(args); err == nil || errors.Is(err, ErrVersion) {
 			t.Errorf("Parse(%q) error = %v, want a failure that is not ErrVersion", args, err)

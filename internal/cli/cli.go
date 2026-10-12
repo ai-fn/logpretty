@@ -29,13 +29,13 @@ Pretty-print JSON, logfmt and plain-text logs read from stdin. The format of
 every line is detected on its own, so mixed streams need no flags.
 
 Flags:
-      --color WHEN   color the output: auto (only on a terminal, the default),
-                     always or never
-      --utc          show times in UTC instead of the local time zone
-      --max-line N   longest line to keep, in bytes (default 1048576); the rest
-                     of a longer line is dropped
-      --version      print the version
-  -h, --help         print this help
+      --color WHEN      color the output: auto (only on a terminal, the
+                        default), always or never
+      --utc             show times in UTC instead of the local time zone
+      --max-line SIZE   longest line to keep, in bytes or with K, M or G
+                        (default 1M); the rest of a longer line is dropped
+      --version         print the version
+  -h, --help            print this help
 
 Examples:
   kubectl logs -f pod | logpretty
@@ -59,9 +59,6 @@ func Parse(args []string) (Config, error) {
 	if fs.NArg() > 0 {
 		return Config{}, fmt.Errorf("unexpected argument %q", fs.Arg(0))
 	}
-	if f.MaxLine <= 0 {
-		return Config{}, errors.New("--max-line must be positive")
-	}
 	return f.Config, nil
 }
 
@@ -75,7 +72,10 @@ type flags struct {
 func newFlagSet(f *flags) *flag.FlagSet {
 	fs := flag.NewFlagSet("logpretty", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	fs.IntVar(&f.MaxLine, "max-line", f.MaxLine, "")
+	fs.Func("max-line", "", func(s string) (err error) {
+		f.MaxLine, err = parseSize(s)
+		return err
+	})
 	fs.BoolVar(&f.UTC, "utc", f.UTC, "")
 	fs.Func("color", "", func(s string) (err error) {
 		f.Color, err = term.ParseColorMode(s)

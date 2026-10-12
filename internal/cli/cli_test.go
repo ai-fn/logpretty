@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"flag"
+	"math"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -49,17 +50,20 @@ func TestParse(t *testing.T) {
 			want: Config{MaxLine: 2, Color: term.ColorNever},
 		},
 		{name: "double dash ends the flags", args: []string{"--"}, want: defaults},
-		{name: "huge max-line", args: []string{"--max-line=9223372036854775807"}, want: Config{MaxLine: 9223372036854775807}},
+		{name: "max-line with a unit", args: []string{"--max-line", "64K"}, want: Config{MaxLine: 64 << 10}},
+		{name: "max-line with a unit spelled out", args: []string{"--max-line=2MiB"}, want: Config{MaxLine: 2 << 20}},
+		{name: "the largest max-line", args: []string{"--max-line=" + strconv.Itoa(math.MaxInt)}, want: Config{MaxLine: math.MaxInt}},
 
 		{name: "positional argument", args: []string{"file.log"}, wantErr: `unexpected argument "file.log"`},
 		{name: "positional argument after double dash", args: []string{"--", "--utc"}, wantErr: `unexpected argument "--utc"`},
 		{name: "positional argument after a flag", args: []string{"--utc", "yes"}, wantErr: `unexpected argument "yes"`},
 		{name: "unknown flag", args: []string{"--nope"}, wantErr: "flag provided but not defined: -nope"},
 		{name: "flag without its value", args: []string{"--color"}, wantErr: "flag needs an argument: -color"},
-		{name: "max-line zero", args: []string{"--max-line", "0"}, wantErr: "--max-line must be positive"},
-		{name: "max-line negative", args: []string{"--max-line", "-5"}, wantErr: "--max-line must be positive"},
+		{name: "max-line zero", args: []string{"--max-line", "0"}, wantErr: `invalid value "0" for flag -max-line: want a positive size in bytes, such as 4096, 64K or 1M`},
+		{name: "max-line negative", args: []string{"--max-line", "-5"}, wantErr: `invalid value "-5" for flag -max-line: want a positive size`},
 		{name: "max-line not a number", args: []string{"--max-line", "abc"}, wantErr: `invalid value "abc" for flag -max-line`},
-		{name: "max-line too large", args: []string{"--max-line=9223372036854775808"}, wantErr: "invalid value"},
+		{name: "max-line too large", args: []string{"--max-line=9223372036854775808"}, wantErr: `invalid value "9223372036854775808" for flag -max-line: the size is too large`},
+		{name: "max-line with a decimal unit", args: []string{"--max-line=1KB"}, wantErr: `invalid value "1KB" for flag -max-line: want a positive size`},
 		{name: "color of an unknown kind", args: []string{"--color=sometimes"}, wantErr: `invalid color mode "sometimes": want auto, always or never`},
 		{name: "color in another case", args: []string{"--color=Always"}, wantErr: `invalid color mode "Always"`},
 		{name: "color with an empty value", args: []string{"--color="}, wantErr: `invalid color mode ""`},
@@ -119,8 +123,11 @@ func TestUsage(t *testing.T) {
 	if !strings.HasPrefix(Usage, "Usage: logpretty ") || !strings.HasSuffix(Usage, "\n") || strings.HasSuffix(Usage, "\n\n") {
 		t.Errorf("the help must start with the usage line and end in one newline:\n%s", Usage)
 	}
-	if !strings.Contains(Usage, "(default "+strconv.Itoa(linereader.DefaultMaxLine)+")") {
-		t.Errorf("the help does not name the default of --max-line, %d", linereader.DefaultMaxLine)
+	// The default is written in the help by hand.
+	if m := regexp.MustCompile(`(?s)--max-line SIZE.*?\(default (\w+)\)`).FindStringSubmatch(Usage); m == nil {
+		t.Error("the help does not name the default of --max-line")
+	} else if n, err := parseSize(m[1]); err != nil || n != linereader.DefaultMaxLine {
+		t.Errorf("the help names %s as the default of --max-line, want %d bytes", m[1], linereader.DefaultMaxLine)
 	}
 	for i, line := range strings.Split(Usage, "\n") {
 		if strings.TrimRight(line, " \t") != line || strings.Contains(line, "\t") {

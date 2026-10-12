@@ -4,6 +4,17 @@ exec logpretty -max-line 4
 cmp stdout want
 ! stderr .
 
+# The size may have a binary unit: both lines are far shorter than a kibibyte.
+stdin input.log
+exec logpretty --max-line 1K
+cmp stdout input.log
+! stderr .
+
+# A decimal unit is turned down: it would mean 1000 to some and 1024 to others.
+! exec logpretty --max-line 1KB
+stderr 'invalid value "1KB" for flag -max-line: want a positive size in bytes'
+! stdout .
+
 -- input.log --
 0123456789
 ok

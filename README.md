@@ -41,7 +41,7 @@ kubectl logs -f pod | logpretty --level warn --where 'user_id=42' --fields msg,l
 | Feature | Status |
 |---|---|
 | Stream stdin to stdout line by line, any line length (longer lines are cut and marked with what was dropped, as in `…[+2.1MiB]`, and the stream keeps flowing) | Available |
-| `--max-line N`: longest line to keep, in bytes (default 1 MiB) | Available |
+| `--max-line SIZE`: longest line to keep, in bytes or with a binary unit such as `64K` or `2M` (default `1M`) | Available |
 | Exit codes: `0` success, `1` read/write error, `2` invalid arguments, `130`/`143` on SIGINT/SIGTERM | Available |
 | Graceful stop: on SIGINT or SIGTERM the complete lines already read are written out before exit | Available |
 | Quiet exit when the reader of stdout leaves early, as in `logpretty \| head` | Available |
@@ -106,7 +106,7 @@ kubectl logs -f pod | logpretty --color=always | less -R
 |---|---|
 | `--color WHEN` | When to color the output: `auto` (on a terminal, the default), `always` or `never`. `always` also beats `NO_COLOR` |
 | `--utc` | Show times in UTC instead of the local time zone |
-| `--max-line N` | Longest line to keep, in bytes (default 1 MiB) |
+| `--max-line SIZE` | Longest line to keep: a number of bytes, or one with `K`, `M` or `G` for KiB, MiB or GiB (default `1M`) |
 | `--version` | Print the version |
 | `-h`, `--help` | Print the help with examples |
 

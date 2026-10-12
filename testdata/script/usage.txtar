@@ -10,7 +10,7 @@ stderr '^logpretty: unexpected argument "file.log"$'
 ! stdout .
 
 ! exec logpretty --max-line 0
-stderr '^logpretty: --max-line must be positive$'
+stderr '^logpretty: invalid value "0" for flag -max-line: want a positive size in bytes, such as 4096, 64K or 1M$'
 ! stdout .
 
 ! exec logpretty --color

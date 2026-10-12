@@ -7,8 +7,10 @@ import (
 	"errors"
 	"io"
 	"io/fs"
+	"math"
 	"math/rand/v2"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -97,11 +99,12 @@ func TestRun(t *testing.T) {
 		{name: "line of exactly max-line with CRLF is not marked", args: []string{"-max-line", "8"}, in: x(8) + "\r\n", wantOut: x(8) + "\n"},
 		{name: "one byte over max-line", args: []string{"-max-line", "8"}, in: x(9) + "\r\n", wantOut: x(8) + "…[+1B]\n"},
 		{name: "max-line applies to the unterminated last line", args: []string{"-max-line", "4"}, in: "0123456789", wantOut: "0123…[+6B]\n"},
+		{name: "max-line with a unit", args: []string{"--max-line", "1K"}, in: x(1030) + "\nok\n", wantOut: x(1024) + "…[+6B]\nok\n"},
 		{name: "max-line with an equals sign", args: []string{"-max-line=3"}, in: "abcdef\n", wantOut: "abc…[+3B]\n"},
 		{name: "a truncated line is not parsed", args: []string{"-max-line", "8"}, in: `{"msg":"a"}` + "\n", wantOut: `{"msg":"…[+3B]` + "\n"},
 		{name: "a line of exactly max-line is parsed", args: []string{"-max-line", "11"}, in: `{"msg":"a"}` + "\n", wantOut: "a\n"},
 
-		{name: "huge max-line allocates nothing up front", args: []string{"-max-line=9223372036854775807"}, in: "abc\n", wantOut: "abc\n"},
+		{name: "huge max-line allocates nothing up front", args: []string{"--max-line=" + strconv.Itoa(math.MaxInt)}, in: "abc\n", wantOut: "abc\n"},
 		{name: "double dash ends the flags", args: []string{"--"}, in: "abc\n", wantOut: "abc\n"},
 
 		{
@@ -148,7 +151,7 @@ func TestRunArgumentErrors(t *testing.T) {
 		{name: "unknown flag", args: []string{"--nope"}, want: "flag provided but not defined: -nope"},
 		{name: "positional argument", args: []string{"file.log"}, want: `unexpected argument "file.log"`},
 		{name: "positional argument after double dash", args: []string{"--", "file.log"}, want: `unexpected argument "file.log"`},
-		{name: "max-line zero", args: []string{"--max-line", "0"}, want: "--max-line must be positive"},
+		{name: "max-line zero", args: []string{"--max-line", "0"}, want: `invalid value "0" for flag -max-line: want a positive size in bytes, such as 4096, 64K or 1M`},
 		{name: "color of an unknown kind", args: []string{"--color=sometimes"}, want: `invalid value "sometimes" for flag -color: invalid color mode "sometimes": want auto, always or never`},
 		{name: "control characters in an argument", args: []string{"--\x1b[31m"}, want: `flag provided but not defined: -\x1b[31m`},
 	}
