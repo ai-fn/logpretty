@@ -1,8 +1,11 @@
 package filter
 
 import (
+	"cmp"
 	"errors"
+	"math/big"
 	"regexp"
+	"strconv"
 	"testing"
 )
 
@@ -80,6 +83,67 @@ func FuzzParseExpr(f *testing.F) {
 		// The value starts where the position says: at its quote, or at its own first byte.
 		if rest := s[got.valuePos:]; rest[0] != '"' && rest[:len(got.value)] != got.value {
 			t.Fatalf("parseExpr(%q): the value %q is not at %d", s, got.value, got.valuePos)
+		}
+	})
+}
+
+var numberSyntax = regexp.MustCompile(`^-?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?\z`)
+
+func FuzzNumber(f *testing.F) {
+	for _, seed := range [][2]string{
+		{"42", "42"},
+		{"0042", "42"},
+		{"-0", "0"},
+		{"-10", "-9"},
+		{"9007199254740993", "9007199254740992"},
+		{"18446744073709551615", "18446744073709551616"},
+		{"-9223372036854775809", "-9223372036854775808"},
+		{"42", "42.0"},
+		{"1e2", "100"},
+		{"-2", "-1.5"},
+		{"1e400", "1e308"},
+		{"1e-400", "0"},
+		{"-0.0", "0"},
+		{"", "1"},
+		{"+1", "1."},
+		{".5", "0x10"},
+		{"1_000", "NaN"},
+		{"1e", "1e+"},
+		{" 1", "1 "},
+		{"--1", "1-"},
+	} {
+		f.Add(seed[0], seed[1])
+	}
+
+	f.Fuzz(func(t *testing.T, x, y string) {
+		a, okA := parseNumber([]byte(x))
+		b, okB := parseNumber([]byte(y))
+		if okA != numberSyntax.MatchString(x) || okB != numberSyntax.MatchString(y) {
+			t.Fatalf("parseNumber(%q), parseNumber(%q) = %v, %v; the reference says %v, %v", x, y, okA, okB, numberSyntax.MatchString(x), numberSyntax.MatchString(y))
+		}
+		if !okA || !okB {
+			return
+		}
+
+		got := a.compare(b)
+		if back := b.compare(a); back != -got || a.compare(a) != 0 || b.compare(b) != 0 {
+			t.Fatalf("%s compare %s = %d, the other way %d, and with themselves %d and %d", x, y, got, back, a.compare(a), b.compare(b))
+		}
+
+		// Integers are checked against exact arithmetic, the rest against float64 itself.
+		var want int
+		bigA, intA := new(big.Int).SetString(x, 10)
+		bigB, intB := new(big.Int).SetString(y, 10)
+		if intA && intB {
+			want = bigA.Cmp(bigB)
+		} else {
+			// An error here is a number out of range, which comes back as an infinity or zero.
+			floatA, _ := strconv.ParseFloat(x, 64)
+			floatB, _ := strconv.ParseFloat(y, 64)
+			want = cmp.Compare(floatA, floatB)
+		}
+		if got != want {
+			t.Fatalf("%s compare %s = %d, want %d", x, y, got, want)
 		}
 	})
 }
