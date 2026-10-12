@@ -155,6 +155,37 @@ func TestRun(t *testing.T) {
 			wantOut: "12:30:00.000 late\n",
 		},
 
+		{
+			name:    "plain show keeps the plain lines whatever the filter",
+			args:    []string{"--level", "error", "--plain", "show"},
+			in:      "banner\nlevel=info msg=a\n  after a\nlevel=error msg=b\n  after b\n",
+			wantOut: "banner\n  after a\nERROR b\n  after b\n",
+		},
+		{
+			name:    "plain hide drops the plain lines even without a filter",
+			args:    []string{"--plain=hide"},
+			in:      "banner\n\nlevel=info msg=a\n  after a\n{}\nlevel=error msg=b\n",
+			wantOut: "INFO  a\n{}\nERROR b\n",
+		},
+		{
+			name:    "plain follow is what happens without the flag",
+			args:    []string{"--level", "error", "--plain", "follow"},
+			in:      "banner\nlevel=info msg=a\n  after a\nlevel=error msg=b\n  after b\n",
+			wantOut: "ERROR b\n  after b\n",
+		},
+		{
+			name:    "a cut line is hidden by plain hide",
+			args:    []string{"--plain", "hide", "--max-line", "20"},
+			in:      x(30) + "\nlevel=warn msg=a\n" + x(30) + "\n",
+			wantOut: "WARN  a\n",
+		},
+		{
+			name:    "a cut line is shown by plain show",
+			args:    []string{"--plain", "show", "--level", "error", "--max-line", "20"},
+			in:      x(30) + "\nlevel=warn msg=a\n" + x(30) + "\n",
+			wantOut: x(20) + "…[+10B]\n" + x(20) + "…[+10B]\n",
+		},
+
 		{name: "huge max-line allocates nothing up front", args: []string{"--max-line=" + strconv.Itoa(math.MaxInt)}, in: "abc\n", wantOut: "abc\n"},
 		{name: "double dash ends the flags", args: []string{"--"}, in: "abc\n", wantOut: "abc\n"},
 
@@ -206,6 +237,7 @@ func TestRunArgumentErrors(t *testing.T) {
 		{name: "color of an unknown kind", args: []string{"--color=sometimes"}, want: `invalid value "sometimes" for flag -color: invalid color mode "sometimes": want auto, always or never`},
 		{name: "level of an unknown name", args: []string{"--level", "loud"}, want: `invalid value "loud" for flag -level: invalid level "loud": want trace, debug, info, warn, error or fatal`},
 		{name: "control characters in an argument", args: []string{"--\x1b[31m"}, want: `flag provided but not defined: -\x1b[31m`},
+		{name: "plain of an unknown kind", args: []string{"--plain", "all"}, want: `invalid value "all" for flag -plain: invalid plain mode "all": want follow, show or hide`},
 		{name: "where expression", args: []string{"--where", "user_id=>42"}, want: "--where 'user_id=>42'\n" + strings.Repeat(" ", 28) + "^ unexpected '>'"},
 		{
 			name: "control characters in a where expression",

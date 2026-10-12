@@ -3,6 +3,7 @@ exec logpretty --help
 stdout '^Usage: logpretty \[flags\] < input$'
 stdout '^      --level LEVEL '
 stdout '^      --where EXPR '
+stdout '^      --plain MODE '
 stdout '^      --color WHEN '
 stdout '^      --utc '
 stdout '^      --max-line SIZE '

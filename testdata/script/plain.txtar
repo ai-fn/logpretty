@@ -1,0 +1,48 @@
+# --plain show keeps the lines that are not entries, whatever the filter hides.
+stdin input.log
+exec logpretty --utc --level error --plain show
+cmp stdout want_show
+! stderr .
+
+# --plain hide drops them even when nothing is filtered.
+stdin input.log
+exec logpretty --utc --plain=hide
+cmp stdout want_hide
+! stderr .
+
+# --plain follow is what happens without the flag: a plain line goes the way of the entry before it.
+stdin input.log
+exec logpretty --utc --level error --plain follow
+cmp stdout want_follow
+! stderr .
+stdin input.log
+exec logpretty --utc --level error
+cmp stdout want_follow
+! stderr .
+
+! exec logpretty --plain all
+stderr '^logpretty: invalid value "all" for flag -plain: invalid plain mode "all": want follow, show or hide$'
+! stdout .
+
+-- input.log --
+banner
+{"time":"2026-10-11T12:00:00Z","level":"info","msg":"started"}
+  after started
+{"time":"2026-10-11T12:00:01Z","level":"error","msg":"request failed","code":500}
+panic: boom
+	main.go:30 +0x45
+level=debug msg=tick
+-- want_show --
+banner
+  after started
+12:00:01.000 ERROR request failed  code=500
+panic: boom
+	main.go:30 +0x45
+-- want_hide --
+12:00:00.000 INFO  started
+12:00:01.000 ERROR request failed  code=500
+DEBUG tick
+-- want_follow --
+12:00:01.000 ERROR request failed  code=500
+panic: boom
+	main.go:30 +0x45

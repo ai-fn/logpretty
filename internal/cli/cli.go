@@ -24,6 +24,7 @@ type Config struct {
 	Color   term.ColorMode
 	Level   entry.Level   // the lowest level to show; LevelUnknown shows every entry
 	Where   []filter.Cond // conditions an entry must meet to be shown, all of them
+	Plain   filter.PlainMode
 }
 
 // ErrHelp is what Parse returns when the arguments ask for the help; it is a request, not a failure.
@@ -38,11 +39,16 @@ every line is detected on its own, so mixed streams need no flags.
 Flags:
       --level LEVEL     show the entries of this level or above: trace, debug,
                         info, warn, error or fatal. An entry without a level
-                        is hidden, and so are the plain lines after a hidden
-                        entry, such as its stack trace
+                        is hidden; by default so are the plain lines after a
+                        hidden entry, such as its stack trace, see --plain
       --where EXPR      show the entries that meet the expression, see below.
-                        Given twice, it asks for both; the plain lines after
-                        a hidden entry are hidden as well
+                        Given twice, it asks for both. By default the plain
+                        lines after a hidden entry are hidden too, see --plain
+      --plain MODE      what to do with the lines that are not entries, such
+                        as a stack trace: follow (the default), show or hide.
+                        Under --level or --where, follow shows a line only
+                        after an entry that is shown; hide hides every such
+                        line even when nothing is filtered
       --color WHEN      color the output: auto (only on a terminal, the
                         default), always or never
       --utc             show times in UTC instead of the local time zone
@@ -75,6 +81,7 @@ Examples:
   kubectl logs -f pod | logpretty
   kubectl logs -f pod | logpretty --level warn
   kubectl logs -f pod | logpretty --where 'status>=500' --where 'path~^/api/'
+  kubectl logs -f pod | logpretty --level error --plain hide
   docker compose logs -f | logpretty --utc
   logpretty --color=always < app.log | less -R
 `
@@ -144,6 +151,10 @@ func newFlagSet(f *flags) *flag.FlagSet {
 	})
 	fs.Func("level", "", func(s string) (err error) {
 		f.Level, err = filter.ParseLevel(s)
+		return err
+	})
+	fs.Func("plain", "", func(s string) (err error) {
+		f.Plain, err = filter.ParsePlainMode(s)
 		return err
 	})
 	fs.Func("where", "", func(s string) error {

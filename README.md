@@ -29,8 +29,8 @@ kubectl logs -f pod | logpretty --level warn --where 'user_id=42' --fields msg,l
 
 > [!NOTE]
 > **Status: early development.** Format detection, readable, colored, terminal-safe output and
-> the `--level` and `--where` filters work. `--fields` is not implemented yet, so the command
-> above is the target usage, not something you can run today.
+> the `--level`, `--where` and `--plain` options work. `--fields` is not implemented yet, so
+> the command above is the target usage, not something you can run today.
 
 <p align="center">
   <img src="assets/demo.svg" width="681" alt="logpretty output in a terminal: the time and the keys are faint, each level has its own style, a plain line is left as it is" />
@@ -50,8 +50,9 @@ kubectl logs -f pod | logpretty --level warn --where 'user_id=42' --fields msg,l
 | Times in the local zone, or in UTC with `--utc` | Available |
 | Safe output: control characters from logs never reach the terminal raw | Available |
 | Colors: `--color=auto\|always\|never`; `auto` colors only a terminal and respects [`NO_COLOR`](https://no-color.org) and `TERM=dumb` | Available |
-| `--level LEVEL`: show only the entries of that level and above; plain lines, such as a stack trace, go the way of the entry before them | Available |
+| `--level LEVEL`: show only the entries of that level and above; by default plain lines, such as a stack trace, go the way of the entry before them | Available |
 | `--where EXPR`: show only the entries that meet an expression, such as `user_id=42`, `http.status>=500` or `msg~timeout`; given twice, it asks for both | Available |
+| `--plain follow\|show\|hide`: what to do with the lines that are not entries: send them the way of the entry before them when a filter is on (the default), show them all, or hide them all, filter or not | Available |
 | `--fields a,b`: choose the fields to show | Not yet |
 
 ## Installation
@@ -106,8 +107,9 @@ kubectl logs -f pod | logpretty --color=always | less -R
 
 | Flag | Description |
 |---|---|
-| `--level LEVEL` | Show the entries of this level or above: `trace`, `debug`, `info`, `warn`, `error` or `fatal`. An entry without a level is hidden, and so are the plain lines after a hidden entry |
-| `--where EXPR` | Show the entries that meet the expression: `key`, or `key OP value` with `=`, `!=`, `>`, `>=`, `<`, `<=`, `~` (a regular expression) or `!~`. Given twice, it asks for both. The plain lines after a hidden entry are hidden too. `logpretty --help` describes the expressions |
+| `--level LEVEL` | Show the entries of this level or above: `trace`, `debug`, `info`, `warn`, `error` or `fatal`. An entry without a level is hidden, and by default so are the plain lines after a hidden entry (see `--plain`) |
+| `--where EXPR` | Show the entries that meet the expression: `key`, or `key OP value` with `=`, `!=`, `>`, `>=`, `<`, `<=`, `~` (a regular expression) or `!~`. Given twice, it asks for both. By default the plain lines after a hidden entry are hidden too (see `--plain`). `logpretty --help` describes the expressions |
+| `--plain MODE` | What to do with the lines that are not entries, such as a stack trace: `follow` (the default) shows every line when nothing is filtered, and under `--level` or `--where` a line only after an entry that is shown; `show` shows them all, and `hide` hides them all, filter or not |
 | `--color WHEN` | When to color the output: `auto` (on a terminal, the default), `always` or `never`. `always` also beats `NO_COLOR` |
 | `--utc` | Show times in UTC instead of the local time zone |
 | `--max-line SIZE` | Longest line to keep: a number of bytes, or one with `K`, `M` or `G` for KiB, MiB or GiB (default `1M`) |
@@ -145,7 +147,7 @@ internal/cli/         # reads the command line into a config; the text of --help
 internal/linereader/  # reads lines of any length and truncates at a limit
 internal/entry/       # parsed form of a log line: fields, level
 internal/parse/       # tells JSON, logfmt and plain lines apart, finds time, level and message
-internal/filter/      # decides which lines are shown: --level, the expressions of --where, plain lines after an entry
+internal/filter/      # decides which lines are shown: --level, the expressions of --where, the plain lines of --plain
 internal/render/      # formats an entry as a line of text and keeps control characters out of the terminal
 internal/term/        # decides whether to color the output: the --color mode, the terminal, NO_COLOR
 internal/golden/      # test helper: compares output with golden files

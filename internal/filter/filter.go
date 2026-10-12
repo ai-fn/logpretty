@@ -3,24 +3,61 @@ package filter
 
 import (
 	"bytes"
+	"fmt"
 
 	"github.com/ai-fn/logpretty/internal/entry"
 	"github.com/ai-fn/logpretty/internal/parse"
 )
+
+// PlainMode is what becomes of the lines that are not entries, such as a stack trace.
+type PlainMode uint8
+
+// Plain modes. PlainFollow sends a plain line the way of the entry before it.
+const (
+	PlainFollow PlainMode = iota
+	PlainShow
+	PlainHide
+)
+
+func (m PlainMode) String() string {
+	switch m {
+	case PlainFollow:
+		return "follow"
+	case PlainShow:
+		return "show"
+	case PlainHide:
+		return "hide"
+	}
+	return fmt.Sprintf("PlainMode(%d)", uint8(m))
+}
+
+// ParsePlainMode reads the mode as it is written on the command line.
+func ParsePlainMode(s string) (PlainMode, error) {
+	switch s {
+	case "follow":
+		return PlainFollow, nil
+	case "show":
+		return PlainShow, nil
+	case "hide":
+		return PlainHide, nil
+	}
+	return PlainFollow, fmt.Errorf("invalid plain mode %q: want follow, show or hide", s)
+}
 
 // Filter keeps the entries that pass its conditions. It remembers its last decision, so it is not safe
 // for concurrent use. The zero Filter keeps every line.
 type Filter struct {
 	MinLevel entry.Level // the lowest level to keep; LevelUnknown keeps entries of any level and of none
 	Where    []Cond      // conditions an entry must meet, all of them
+	Plain    PlainMode   // what becomes of the plain lines; the zero mode sends them the way of the entry before
 
 	keptLast bool // the decision on the last entry that was not plain
 	finder   parse.Finder
 	scratch  []byte // a value with its escapes decoded
 }
 
-// Keep reports whether to show the entry. A plain line goes the way of the entry before it: a stack
-// trace is of no use without its error, and noise next to a hidden one.
+// Keep reports whether to show the entry. A plain line goes the way of the entry before it unless Plain
+// says otherwise: a stack trace is of no use without its error, and noise next to a hidden one.
 func (f *Filter) Keep(e *entry.Entry) bool {
 	if e.Format == entry.FormatPlain {
 		return f.KeepPlain()
@@ -52,8 +89,15 @@ func (f *Filter) lookup(e *entry.Entry, c *Cond) (entry.Value, bool) {
 	return entry.Value{}, false
 }
 
-// KeepPlain reports whether to show a line that was not parsed, such as one cut at the length limit.
+// KeepPlain reports whether to show a line that was not parsed, such as one cut at the length limit: it is
+// a plain line, whatever it was before the cut.
 func (f *Filter) KeepPlain() bool {
+	switch f.Plain {
+	case PlainShow:
+		return true
+	case PlainHide:
+		return false
+	}
 	return !f.active() || f.keptLast
 }
 
