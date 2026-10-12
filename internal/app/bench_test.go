@@ -15,6 +15,7 @@ func BenchmarkRun(b *testing.B) {
 		line string
 	}{
 		{name: "json-short", line: `{"level":"info","msg":"request done","status":200}`},
+		{name: "logfmt-short", line: `level=info msg="request done" status=200`},
 		{name: "plain-1KiB", line: strings.Repeat("x", 1<<10)},
 	}
 

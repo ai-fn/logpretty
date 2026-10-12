@@ -1,4 +1,4 @@
-# A line longer than -max-line is cut and marked with the dropped byte count; the stream goes on.
+# A line longer than -max-line is cut and marked with the size of what was dropped; the stream goes on.
 stdin input.log
 exec logpretty -max-line 4
 cmp stdout want
@@ -8,5 +8,5 @@ cmp stdout want
 0123456789
 ok
 -- want --
-0123…[+6]
+0123…[+6B]
 ok

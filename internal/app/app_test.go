@@ -45,7 +45,17 @@ func (w *syncWriter) String() string {
 	return w.buf.String()
 }
 
+// A fixed zone, because on a UTC machine a mixed-up zone would go unnoticed.
+// Not for parallel tests: it swaps time.Local.
+func setLocalZone(t *testing.T) {
+	t.Helper()
+	old := time.Local
+	time.Local = time.FixedZone("test", 3*60*60)
+	t.Cleanup(func() { time.Local = old })
+}
+
 func TestRun(t *testing.T) {
+	setLocalZone(t)
 	x := func(n int) string { return strings.Repeat("x", n) }
 
 	tests := []struct {
@@ -57,19 +67,37 @@ func TestRun(t *testing.T) {
 		wantStderr string
 	}{
 		{name: "empty input"},
-		{name: "lines pass through unchanged", in: "{\"id\":1}\nlevel=warn msg=x\nplain text\n", wantOut: "{\"id\":1}\nlevel=warn msg=x\nplain text\n"},
+		{name: "each format is rendered", in: "{\"id\":1}\nlevel=warn msg=x\nplain text\n", wantOut: "id=1\nWARN  x\nplain text\n"},
+		{
+			name:    "utc shows the time in UTC",
+			args:    []string{"-utc"},
+			in:      `{"time":"2026-10-11T12:00:00.5+03:00","level":"info","msg":"hi","n":1}` + "\n",
+			wantOut: "09:00:00.500 INFO  hi  n=1\n",
+		},
+		{name: "time is shown in the local zone", in: `{"time":"2026-10-11T12:00:00Z","msg":"hi"}` + "\n", wantOut: "15:00:00.000 hi\n"},
+		{name: "time without a zone is local", in: `{"time":"2026-10-11 12:00:00","msg":"hi"}` + "\n", wantOut: "12:00:00.000 hi\n"},
+		{
+			name:    "utc reads a time without a zone as UTC",
+			args:    []string{"-utc"},
+			in:      `{"time":"2026-10-11 12:00:00","msg":"hi"}` + "\n",
+			wantOut: "12:00:00.000 hi\n",
+		},
+		{name: "control characters are written out", in: "a\x1b[31mb\n{\"msg\":\"x\\u001b]0;t\\u0007\"}\n", wantOut: `a\x1b[31mb` + "\n" + `x\x1b]0;t\x07` + "\n"},
+		{name: "byte order mark is dropped", in: "\xef\xbb\xbf{\"msg\":\"x\"}\n", wantOut: "x\n"},
 		{name: "blank lines are kept", in: "\n\nx\n\n", wantOut: "\n\nx\n\n"},
 		{name: "last line gets a newline", in: "abc", wantOut: "abc\n"},
 		{name: "crlf becomes lf", in: "one\r\ntwo\r\n", wantOut: "one\ntwo\n"},
-		{name: "cr inside a line is kept", in: "a\rb\n", wantOut: "a\rb\n"},
-		{name: "cr at EOF is kept", in: "abc\r", wantOut: "abc\r\n"},
+		{name: "cr inside a line is written out", in: "a\rb\n", wantOut: `a\rb` + "\n"},
+		{name: "cr at EOF is written out", in: "abc\r", wantOut: `abc\r` + "\n"},
 
-		{name: "max-line marks the dropped bytes", args: []string{"-max-line", "8"}, in: x(10) + "\nok\n", wantOut: x(8) + "…[+2]\nok\n"},
+		{name: "max-line marks the dropped bytes", args: []string{"-max-line", "8"}, in: x(10) + "\nok\n", wantOut: x(8) + "…[+2B]\nok\n"},
 		{name: "line of exactly max-line is not marked", args: []string{"-max-line", "8"}, in: x(8) + "\n", wantOut: x(8) + "\n"},
 		{name: "line of exactly max-line with CRLF is not marked", args: []string{"-max-line", "8"}, in: x(8) + "\r\n", wantOut: x(8) + "\n"},
-		{name: "one byte over max-line", args: []string{"-max-line", "8"}, in: x(9) + "\r\n", wantOut: x(8) + "…[+1]\n"},
-		{name: "max-line applies to the unterminated last line", args: []string{"-max-line", "4"}, in: "0123456789", wantOut: "0123…[+6]\n"},
-		{name: "max-line with an equals sign", args: []string{"-max-line=3"}, in: "abcdef\n", wantOut: "abc…[+3]\n"},
+		{name: "one byte over max-line", args: []string{"-max-line", "8"}, in: x(9) + "\r\n", wantOut: x(8) + "…[+1B]\n"},
+		{name: "max-line applies to the unterminated last line", args: []string{"-max-line", "4"}, in: "0123456789", wantOut: "0123…[+6B]\n"},
+		{name: "max-line with an equals sign", args: []string{"-max-line=3"}, in: "abcdef\n", wantOut: "abc…[+3B]\n"},
+		{name: "a truncated line is not parsed", args: []string{"-max-line", "8"}, in: `{"msg":"a"}` + "\n", wantOut: `{"msg":"…[+3B]` + "\n"},
+		{name: "a line of exactly max-line is parsed", args: []string{"-max-line", "11"}, in: `{"msg":"a"}` + "\n", wantOut: "a\n"},
 
 		{name: "huge max-line allocates nothing up front", args: []string{"-max-line=9223372036854775807"}, in: "abc\n", wantOut: "abc\n"},
 		{name: "double dash ends the flags", args: []string{"--"}, in: "abc\n", wantOut: "abc\n"},
@@ -80,6 +108,7 @@ func TestRun(t *testing.T) {
 		{name: "max-line negative", args: []string{"-max-line", "-5"}, wantCode: 2, wantStderr: "-max-line must be positive"},
 		{name: "max-line not a number", args: []string{"-max-line", "abc"}, wantCode: 2, wantStderr: "invalid value"},
 		{name: "help", args: []string{"-h"}, wantStderr: "Usage of logpretty"},
+		{name: "utc takes no value", args: []string{"-utc", "yes"}, wantCode: 2, wantStderr: "unexpected argument"},
 	}
 
 	for _, tt := range tests {
@@ -109,16 +138,18 @@ func TestRunDefaultMaxLine(t *testing.T) {
 
 	code := Run(t.Context(), nil, strings.NewReader(strings.Repeat("x", limit+5)+"\nnext\n"), &stdout, io.Discard)
 
-	want := strings.Repeat("x", limit) + "…[+5]\nnext\n"
+	want := strings.Repeat("x", limit) + "…[+5B]\nnext\n"
 	if code != 0 || stdout.String() != want {
 		t.Errorf("code = %d, output of %d bytes (tail %q); want 0 and %d bytes ending in the marker",
 			code, stdout.Len(), stdout.String()[max(0, stdout.Len()-12):], len(want))
 	}
 }
 
-func TestRunMatchesCatOnLFText(t *testing.T) {
+// Plain lines come out as they went in, whatever the sizes of the reads and of the batches.
+func TestRunMatchesCatOnPlainText(t *testing.T) {
 	rng := rand.New(rand.NewPCG(1, 2))
-	const alphabet = "abc XYZ 012 \t{}[]\":,=_-./"
+	// No equals sign and no colon: without them a line is neither logfmt nor a JSON object with a pair.
+	const alphabet = "abc XYZ 012 \t{}[]\",_-./"
 	var in strings.Builder
 	for range 20_000 {
 		for range rng.IntN(200) {
@@ -146,18 +177,36 @@ func TestRunMatchesCatOnLFText(t *testing.T) {
 	}
 }
 
-func TestRenderDoesNotAllocate(t *testing.T) {
-	w := bufio.NewWriterSize(io.Discard, writeBufferSize)
-	line := []byte("some log line")
+func TestWriteDoesNotAllocate(t *testing.T) {
+	lines := []string{
+		"some log line",
+		`time=2026-10-11T12:00:00Z level=info msg="request \"done\"" status=200`,
+		`{"time":"2026-10-11T12:00:00.123+03:00","level":"info","msg":"request done","status":200}`,
+		"a line with \x1b and \xff",
+	}
+	// nil is the zone of the machine, which is what runs without -utc.
+	for _, loc := range []*time.Location{nil, time.UTC} {
+		p := &pipeline{w: bufio.NewWriterSize(io.Discard, writeBufferSize)}
+		p.parser.Loc, p.renderer.Loc = loc, loc
 
-	for _, dropped := range []int{0, 12345} {
-		allocs := testing.AllocsPerRun(100, func() {
-			if err := render(w, line, dropped); err != nil {
-				t.Fatal(err)
+		for _, line := range lines {
+			if raceEnabled && strings.HasPrefix(line, "{") {
+				continue
 			}
-		})
-		if allocs != 0 {
-			t.Errorf("render with %d dropped bytes allocates %v times per call, want 0", dropped, allocs)
+			b := []byte(line)
+			for _, dropped := range []int{0, 12345} {
+				if err := p.write(b, dropped); err != nil { // the first call grows the buffers
+					t.Fatal(err)
+				}
+				allocs := testing.AllocsPerRun(100, func() {
+					if err := p.write(b, dropped); err != nil {
+						t.Fatal(err)
+					}
+				})
+				if allocs != 0 {
+					t.Errorf("zone %v: write of %q with %d dropped bytes allocates %v times per call, want 0", loc, line, dropped, allocs)
+				}
+			}
 		}
 	}
 }

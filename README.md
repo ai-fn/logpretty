@@ -28,23 +28,24 @@ kubectl logs -f pod | logpretty --level warn --where 'user_id=42' --fields msg,l
 ```
 
 > [!NOTE]
-> **Status: early development.** Streaming stdin to stdout works, and for now the output equals
-> the input. Format detection, pretty rendering, colors and the filters are not implemented yet,
-> so the command above is the target usage, not something you can run today.
+> **Status: early development.** Format detection and readable, terminal-safe output work.
+> Colors and the filters (`--level`, `--where`, `--fields`) are not implemented yet, so the
+> command above is the target usage, not something you can run today.
 
 ## Features
 
 | Feature | Status |
 |---|---|
-| Stream stdin to stdout line by line, any line length (longer lines are truncated with an `…[+N]` marker and the stream keeps flowing) | Available |
+| Stream stdin to stdout line by line, any line length (longer lines are cut and marked with what was dropped, as in `…[+2.1MiB]`, and the stream keeps flowing) | Available |
 | `-max-line N`: longest line to keep, in bytes (default 1 MiB) | Available |
 | Exit codes: `0` success, `1` read/write error, `2` invalid arguments, `130`/`143` on SIGINT/SIGTERM | Available |
 | Graceful stop: on SIGINT or SIGTERM the complete lines already read are written out before exit | Available |
 | Quiet exit when the reader of stdout leaves early, as in `logpretty \| head` | Available |
-| Per-line format detection: JSON, logfmt, plain text | Not yet |
-| Readable output with aligned level badges, timestamps and `key=value` fields | Not yet |
+| Per-line format detection: JSON, logfmt, plain text; JSON after the prefix of `kubectl logs --timestamps` or `docker compose logs` | Available |
+| Readable output: `time LEVEL message  key=value …`, fields in their original order, nested objects as compact JSON | Available |
+| Times in the local zone, or in UTC with `-utc` | Available |
+| Safe output: control characters from logs never reach the terminal raw | Available |
 | Colors: `--color=auto\|always\|never`, `NO_COLOR` support | Not yet |
-| Safe output: control characters from logs never reach the terminal raw | Not yet |
 | Filters: `--level`, `--where 'key OP value'`, `--fields a,b` | Not yet |
 
 ## Installation
@@ -63,15 +64,36 @@ make build          # produces bin/logpretty
 
 ## Usage
 
-For now `logpretty` passes lines through: it turns CRLF into LF and marks truncated lines.
+Pipe any log stream into `logpretty`. Each line is rendered by its own format, and a line that is
+not structured is printed as it is, apart from control characters:
 
 ```console
-$ printf 'one\r\ntwo\n' | logpretty
-one
-two
-$ printf '0123456789\n' | logpretty -max-line 4
-0123…[+6]
+$ cat app.log
+{"time":"2026-10-11T12:00:00.123Z","level":"info","msg":"server started","port":8080}
+time=2026-10-11T12:00:01Z level=warn msg="slow request" latency=1.2s path=/api/v1/users
+web-1  | {"time":"2026-10-11T12:00:02Z","level":"error","msg":"query failed","db":{"host":"pg-1","retries":3}}
+panic: runtime error: index out of range
+$ logpretty -utc < app.log
+12:00:00.123 INFO  server started  port=8080
+12:00:01.000 WARN  slow request  latency=1.2s path=/api/v1/users
+web-1  | 12:00:02.000 ERROR query failed  db={"host":"pg-1","retries":3}
+panic: runtime error: index out of range
 ```
+
+Control characters are written out, so a log line cannot change the terminal, and a line longer
+than `-max-line` is cut with a note of how much was dropped:
+
+```console
+$ printf '{"msg":"\\u001b]0;pwned\\u0007"}\n' | logpretty
+\x1b]0;pwned\x07
+$ printf '0123456789\n' | logpretty -max-line 4
+0123…[+6B]
+```
+
+| Flag | Description |
+|---|---|
+| `-utc` | Show times in UTC instead of the local time zone |
+| `-max-line N` | Longest line to keep, in bytes (default 1 MiB) |
 
 ## Development
 
@@ -94,10 +116,12 @@ on every pull request and every push to `main`.
 
 ```
 cmd/logpretty/        # main() maps signals to a context and calls app.Run
-internal/app/         # flags and the read-to-write pipeline
+internal/app/         # flags and the pipeline: read, parse, render, write
 internal/linereader/  # reads lines of any length and truncates at a limit
-internal/entry/       # parsed form of a log line: fields, level (not wired into the binary yet)
-internal/parse/       # tells JSON, logfmt and plain lines apart, finds time, level and message (not wired in yet)
+internal/entry/       # parsed form of a log line: fields, level
+internal/parse/       # tells JSON, logfmt and plain lines apart, finds time, level and message
+internal/render/      # formats an entry as a line of text and keeps control characters out of the terminal
+internal/golden/      # test helper: compares output with golden files
 testdata/script/      # end-to-end scenarios run against the real binary (testscript)
 assets/               # logo
 .github/workflows/    # CI

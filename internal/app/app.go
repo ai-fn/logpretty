@@ -8,10 +8,12 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"strconv"
 	"sync"
+	"time"
 
 	"github.com/ai-fn/logpretty/internal/linereader"
+	"github.com/ai-fn/logpretty/internal/parse"
+	"github.com/ai-fn/logpretty/internal/render"
 )
 
 // ExitInterrupted is the exit code Run returns when ctx is canceled.
@@ -25,6 +27,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	fs := flag.NewFlagSet("logpretty", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	maxLine := fs.Int("max-line", linereader.DefaultMaxLine, "longest line to keep, in `bytes`; the rest of a longer line is dropped")
+	utc := fs.Bool("utc", false, "show times in UTC instead of the local time zone")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -43,6 +46,10 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	p := &pipeline{
 		r: linereader.New(stdin, *maxLine),
 		w: bufio.NewWriterSize(stdout, writeBufferSize),
+	}
+	if *utc {
+		// The same zone for both, so that a time written without one is shown as it was written.
+		p.parser.Loc, p.renderer.Loc = time.UTC, time.UTC
 	}
 	// A read from stdin cannot be interrupted, so the pipeline runs aside and is abandoned on cancel.
 	done := make(chan error, 1)
@@ -74,11 +81,15 @@ func writeError(err error) error {
 	return fmt.Errorf("write: %w", err)
 }
 
-// pipeline copies lines from r to w. mu is held while output may be unflushed and released only
+// pipeline renders the lines of r into w. mu is held while output may be unflushed and released only
 // around a read that may block, so whoever takes it finds everything rendered so far flushed.
 type pipeline struct {
 	r *linereader.Reader
 	w *bufio.Writer
+
+	parser   parse.Parser
+	renderer render.Renderer
+	out      []byte
 
 	mu      sync.Mutex
 	stopped bool
@@ -110,7 +121,7 @@ func (p *pipeline) burst(line []byte, dropped int, readErr error) (done bool, er
 	}
 
 	for readErr == nil {
-		if err := render(p.w, line, dropped); err != nil {
+		if err := p.write(line, dropped); err != nil {
 			return true, writeError(err)
 		}
 		if p.r.MayBlock() {
@@ -132,14 +143,13 @@ func (p *pipeline) burst(line []byte, dropped int, readErr error) (done bool, er
 	}
 }
 
-// render writes the line and, for a truncated one, a marker with the dropped byte count.
-// bufio.Writer keeps the first error and returns it from every later call, so only the last result is checked.
-func render(w *bufio.Writer, line []byte, dropped int) error {
-	_, _ = w.Write(line)
+// A line that was cut is not parsed: what is left of it says little about its format.
+func (p *pipeline) write(line []byte, dropped int) error {
 	if dropped > 0 {
-		_, _ = w.WriteString("…[+")
-		_, _ = w.Write(strconv.AppendInt(w.AvailableBuffer(), int64(dropped), 10))
-		_ = w.WriteByte(']')
+		p.out = p.renderer.AppendTruncated(p.out[:0], line, dropped)
+	} else {
+		p.out = p.renderer.AppendEntry(p.out[:0], p.parser.Parse(line))
 	}
-	return w.WriteByte('\n')
+	_, err := p.w.Write(p.out)
+	return err
 }

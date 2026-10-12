@@ -1,0 +1,20 @@
+# Every line is rendered by its own format: JSON, logfmt, JSON after a collector's prefix, plain text.
+stdin input.log
+exec logpretty -utc
+cmp stdout want
+! stderr .
+
+-- input.log --
+{"time":"2026-10-11T12:00:00.123+03:00","level":"info","msg":"started","port":8080}
+time=2026-10-11T12:00:01Z level=warn msg="slow request" latency=1.2s path=/api/v1/users
+web-1    | {"level":"error","msg":"upstream failed","http":{"status": 502, "url": "http://db/a b"}}
+plain text line
+
+	at main.go:30 +0x45
+-- want --
+09:00:00.123 INFO  started  port=8080
+12:00:01.000 WARN  slow request  latency=1.2s path=/api/v1/users
+web-1    | ERROR upstream failed  http={"status":502,"url":"http://db/a b"}
+plain text line
+
+	at main.go:30 +0x45

@@ -15,4 +15,5 @@ stderr '-max-line must be positive'
 exec logpretty -h
 stderr 'Usage of logpretty'
 stderr '-max-line'
+stderr '-utc'
 ! stdout .

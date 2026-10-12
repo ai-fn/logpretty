@@ -1,0 +1,11 @@
+# Control characters in a log never reach the terminal as they are: an escaped one in JSON and a raw one.
+write input.log '{\"msg\":\"title \\u001b]0;x\\u0007 set\"}\nraw \x1b[31mred\x1b[0m text\n'
+stdin input.log
+exec logpretty
+cmp stdout want
+! stdout '\x1b'
+! stderr .
+
+-- want --
+title \x1b]0;x\x07 set
+raw \x1b[31mred\x1b[0m text
