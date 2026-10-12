@@ -1,0 +1,32 @@
+# -color=always colors the output even when it is not a terminal.
+stdin input.log
+exec logpretty -color=always
+stdout '\x1b\[33mWARN\x1b\[0m  slow request  \x1b\[2mlatency=\x1b\[0m1.2s'
+stdout '^plain text line$'
+! stderr .
+
+# It beats NO_COLOR.
+env NO_COLOR=1
+stdin input.log
+exec logpretty -color=always
+stdout '\x1b\[33mWARN\x1b\[0m'
+env NO_COLOR=
+
+# Without the flag the output is colored only on a terminal, and here it is a pipe.
+stdin input.log
+exec logpretty
+stdout '^WARN  slow request  latency=1.2s$'
+! stdout '\x1b'
+
+stdin input.log
+exec logpretty -color=never
+stdout '^WARN  slow request  latency=1.2s$'
+! stdout '\x1b'
+
+! exec logpretty -color=sometimes
+stderr 'invalid color mode "sometimes": want auto, always or never'
+! stdout .
+
+-- input.log --
+level=warn msg="slow request" latency=1.2s
+plain text line

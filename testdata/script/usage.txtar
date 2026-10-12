@@ -16,4 +16,5 @@ exec logpretty -h
 stderr 'Usage of logpretty'
 stderr '-max-line'
 stderr '-utc'
+stderr '-color'
 ! stdout .

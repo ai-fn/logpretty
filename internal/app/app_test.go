@@ -109,6 +109,22 @@ func TestRun(t *testing.T) {
 		{name: "max-line not a number", args: []string{"-max-line", "abc"}, wantCode: 2, wantStderr: "invalid value"},
 		{name: "help", args: []string{"-h"}, wantStderr: "Usage of logpretty"},
 		{name: "utc takes no value", args: []string{"-utc", "yes"}, wantCode: 2, wantStderr: "unexpected argument"},
+
+		{
+			name:    "color always",
+			args:    []string{"-color=always", "-utc"},
+			in:      `{"time":"2026-10-11T12:00:00Z","level":"warn","msg":"slow","ms":120}` + "\nplain\n",
+			wantOut: "\x1b[2m12:00:00.000\x1b[0m \x1b[33mWARN\x1b[0m  slow  \x1b[2mms=\x1b[0m120\nplain\n",
+		},
+		{name: "color always marks a cut line", args: []string{"-color", "always", "-max-line", "3"}, in: "abcdef\n", wantOut: "abc\x1b[33m…[+3B]\x1b[0m\n"},
+		{name: "color always still writes control characters out", args: []string{"-color=always"}, in: "a\x1b[31mb\n", wantOut: `a\x1b[31mb` + "\n"},
+		{name: "color never", args: []string{"-color=never"}, in: "level=warn msg=x\n", wantOut: "WARN  x\n"},
+		{name: "the last color wins", args: []string{"-color=always", "-color=never"}, in: "level=warn msg=x\n", wantOut: "WARN  x\n"},
+		{name: "color auto does not color what is not a terminal", args: []string{"-color=auto"}, in: "level=warn msg=x\n", wantOut: "WARN  x\n"},
+		{name: "color of an unknown kind", args: []string{"-color=sometimes"}, wantCode: 2, wantStderr: `invalid color mode "sometimes"`},
+		{name: "color in another case", args: []string{"-color=Always"}, wantCode: 2, wantStderr: `invalid color mode "Always"`},
+		{name: "color without a value", args: []string{"-color"}, wantCode: 2, wantStderr: "flag needs an argument"},
+		{name: "color with an empty value", args: []string{"-color="}, wantCode: 2, wantStderr: `invalid color mode ""`},
 	}
 
 	for _, tt := range tests {

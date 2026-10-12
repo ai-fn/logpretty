@@ -28,9 +28,9 @@ kubectl logs -f pod | logpretty --level warn --where 'user_id=42' --fields msg,l
 ```
 
 > [!NOTE]
-> **Status: early development.** Format detection and readable, terminal-safe output work.
-> Colors and the filters (`--level`, `--where`, `--fields`) are not implemented yet, so the
-> command above is the target usage, not something you can run today.
+> **Status: early development.** Format detection and readable, colored, terminal-safe output
+> work. The filters (`--level`, `--where`, `--fields`) are not implemented yet, so the command
+> above is the target usage, not something you can run today.
 
 ## Features
 
@@ -45,7 +45,7 @@ kubectl logs -f pod | logpretty --level warn --where 'user_id=42' --fields msg,l
 | Readable output: `time LEVEL message  key=value …`, fields in their original order, nested objects as compact JSON | Available |
 | Times in the local zone, or in UTC with `-utc` | Available |
 | Safe output: control characters from logs never reach the terminal raw | Available |
-| Colors: `--color=auto\|always\|never`, `NO_COLOR` support | Not yet |
+| Colors: `-color=auto\|always\|never`; `auto` colors only a terminal and respects [`NO_COLOR`](https://no-color.org) and `TERM=dumb` | Available |
 | Filters: `--level`, `--where 'key OP value'`, `--fields a,b` | Not yet |
 
 ## Installation
@@ -90,10 +90,22 @@ $ printf '0123456789\n' | logpretty -max-line 4
 0123…[+6B]
 ```
 
+On a terminal the output is colored: the time, the keys and a collector's prefix are faint, and
+each level has its own style. Into a pipe or a file it is plain, unless `-color=always` asks for
+colors, for example for `less -R`:
+
+```bash
+kubectl logs -f pod | logpretty -color=always | less -R
+```
+
 | Flag | Description |
 |---|---|
+| `-color WHEN` | When to color the output: `auto` (on a terminal, the default), `always` or `never`. `always` also beats `NO_COLOR` |
 | `-utc` | Show times in UTC instead of the local time zone |
 | `-max-line N` | Longest line to keep, in bytes (default 1 MiB) |
+
+Git Bash and other terminals on Windows that give a program a pipe instead of a console get no
+colors in the `auto` mode; use `-color=always` there.
 
 ## Development
 
@@ -121,6 +133,7 @@ internal/linereader/  # reads lines of any length and truncates at a limit
 internal/entry/       # parsed form of a log line: fields, level
 internal/parse/       # tells JSON, logfmt and plain lines apart, finds time, level and message
 internal/render/      # formats an entry as a line of text and keeps control characters out of the terminal
+internal/term/        # decides whether to color the output: the -color mode, the terminal, NO_COLOR
 internal/golden/      # test helper: compares output with golden files
 testdata/script/      # end-to-end scenarios run against the real binary (testscript)
 assets/               # logo

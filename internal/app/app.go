@@ -8,12 +8,14 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/ai-fn/logpretty/internal/linereader"
 	"github.com/ai-fn/logpretty/internal/parse"
 	"github.com/ai-fn/logpretty/internal/render"
+	"github.com/ai-fn/logpretty/internal/term"
 )
 
 // ExitInterrupted is the exit code Run returns when ctx is canceled.
@@ -28,6 +30,11 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	fs.SetOutput(stderr)
 	maxLine := fs.Int("max-line", linereader.DefaultMaxLine, "longest line to keep, in `bytes`; the rest of a longer line is dropped")
 	utc := fs.Bool("utc", false, "show times in UTC instead of the local time zone")
+	color := term.ColorAuto
+	fs.Func("color", "`when` to color the output: auto (on a terminal, the default), always or never", func(s string) (err error) {
+		color, err = term.ParseColorMode(s)
+		return err
+	})
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -50,6 +57,10 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	if *utc {
 		// The same zone for both, so that a time written without one is shown as it was written.
 		p.parser.Loc, p.renderer.Loc = time.UTC, time.UTC
+	}
+	// stdout itself is asked, not the buffer in front of it: only the file knows whether it is a terminal.
+	if term.UseColor(color, stdout, os.Getenv) {
+		p.renderer.Theme = render.DefaultTheme()
 	}
 	// A read from stdin cannot be interrupted, so the pipeline runs aside and is abandoned on cancel.
 	done := make(chan error, 1)
