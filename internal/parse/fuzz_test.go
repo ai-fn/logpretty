@@ -537,3 +537,91 @@ func FuzzParse(f *testing.F) {
 		}
 	})
 }
+
+// referenceFind is Finder.Find over what encoding/json reads. It reports unsure when a key on the way has
+// an escape or is not UTF-8: encoding/json decodes such a key in its own way.
+func referenceFind(t *testing.T, object []byte, path string) (value string, found, unsure bool) {
+	t.Helper()
+	fields, ok := referenceJSONFields(t, object)
+	if !ok {
+		return "", false, false
+	}
+	for _, f := range fields {
+		if f.keyEscaped || !utf8.ValidString(f.key) || strings.ContainsRune(f.key, utf8.RuneError) {
+			return "", false, true
+		}
+	}
+	for _, f := range fields {
+		if f.key == path {
+			return f.value, true, false
+		}
+	}
+	for _, f := range fields {
+		rest, ok := strings.CutPrefix(path, f.key+".")
+		if !ok || !strings.HasPrefix(f.value, "{") {
+			continue
+		}
+		value, found, unsure := referenceFind(t, []byte(f.value), rest)
+		if found || unsure {
+			return value, found, unsure
+		}
+	}
+	return "", false, false
+}
+
+func FuzzFind(f *testing.F) {
+	seeds := []struct{ line, path string }{
+		{`{"http":{"status":502,"req":{"method":"GET"}},"user_id":42}`, "http.req.method"},
+		{`{"a":{"b":1},"a.b":2}`, "a.b"},
+		{`{"a":{"b":{"x":0}},"a.b":{"c":1}}`, "a.b.c"},
+		{`{"a":{"x":1},"a":{"b":2}}`, "a.b"},
+		{`{"":{"":1}}`, "."},
+		{`{"a":{"":{"b":[1,{"c":2}]}}}`, "a..b"},
+		{`{"a":[{"b":1}],"s":"{\"b\":1}"}`, "s.b"},
+		{" { \"a\" : { \"b\" : null } } ", "a.b"},
+		{`{"a\"b":{"c":1}}`, `a"b.c`},
+		{"{\"\xff\":{\"c\":1}}", "\xff.c"},
+		{`web-1 | {"a":{"b":1}}`, "a.b"},
+		{`level=info a.b=1 c={"d":2} word`, "a.b"},
+		{`plain text`, "plain"},
+		{``, ``},
+	}
+	for _, s := range seeds {
+		f.Add([]byte(s.line), []byte(s.path))
+	}
+
+	var used Finder
+	f.Fuzz(func(t *testing.T, line, path []byte) {
+		// Clipped, so that a read past the end panics instead of finding spare capacity.
+		line, path = slices.Clip(slices.Clone(line)), slices.Clip(slices.Clone(path))
+		p := Parser{Loc: time.UTC}
+		e := p.Parse(line)
+
+		var fresh Finder
+		got, ok := fresh.Find(e, path)
+
+		// A Finder that has searched other lines must find the same.
+		if again, okAgain := used.Find(e, path); okAgain != ok || !bytes.Equal(again.Raw, got.Raw) || again.Kind != got.Kind {
+			t.Fatalf("Find(%q, %q) = %q, %v with a new Finder; %q, %v with a used one", line, path, got.Raw, ok, again.Raw, okAgain)
+		}
+		if !ok && (got.Raw != nil || got.Kind != entry.KindNone) {
+			t.Fatalf("Find(%q, %q) found nothing but returned %q of kind %v", line, path, got.Raw, got.Kind)
+		}
+
+		// encoding/json is asked about a lone object only: a prefix or logfmt has no reference.
+		if e.Format != entry.FormatJSON || len(e.Prefix) > 0 {
+			return
+		}
+		want, wantOK, unsure := referenceFind(t, bytes.TrimPrefix(line, []byte(byteOrderMark)), string(path))
+		if unsure {
+			return
+		}
+		value := string(got.Raw)
+		if got.Kind == entry.KindString {
+			value = `"` + value + `"`
+		}
+		if ok != wantOK || value != want {
+			t.Fatalf("Find(%q, %q) = %q, %v; encoding/json gives %q, %v", line, path, value, ok, want, wantOK)
+		}
+	})
+}

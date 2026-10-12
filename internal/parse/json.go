@@ -16,7 +16,12 @@ func appendJSONFields(dst []entry.Field, line []byte) ([]entry.Field, bool) {
 	if len(b) == 0 || b[0] != '{' || !json.Valid(b) {
 		return dst, false
 	}
+	return appendObjectFields(dst, b), true
+}
 
+// appendObjectFields appends the pairs of b, which must be a valid JSON object that starts at its brace:
+// a line that json.Valid has passed, or an object inside one.
+func appendObjectFields(dst []entry.Field, b []byte) []entry.Field {
 	i := skipJSONSpace(b, 1)
 	for b[i] != '}' {
 		end, escaped := stringEnd(b, i+1)
@@ -37,7 +42,7 @@ func appendJSONFields(dst []entry.Field, line []byte) ([]entry.Field, bool) {
 			i = skipJSONSpace(b, i+1)
 		}
 	}
-	return dst, true
+	return dst
 }
 
 // jsonValue returns the value that starts at b[i] and the index just past it.

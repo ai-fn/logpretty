@@ -71,3 +71,34 @@ func BenchmarkValid(b *testing.B) {
 		})
 	}
 }
+
+func BenchmarkFind(b *testing.B) {
+	var line string
+	for _, tt := range benchLines() {
+		if tt.name == "json-20-fields" {
+			line = tt.line
+		}
+	}
+	tests := []struct{ name, path string }{
+		{name: "first-key", path: "time"},
+		{name: "last-key", path: "field15"},
+		{name: "one-level-down", path: "http.method"},
+		{name: "two-levels-down", path: "http.headers.accept"},
+		{name: "missing", path: "nope"},
+		{name: "missing-below", path: "http.nope"},
+	}
+	for _, tt := range tests {
+		b.Run(tt.name, func(b *testing.B) {
+			p := Parser{Loc: time.UTC}
+			e := p.Parse([]byte(line))
+			path := []byte(tt.path)
+			var f Finder
+			f.Find(e, path) // grows the scratch space once
+			b.ReportAllocs()
+
+			for b.Loop() {
+				f.Find(e, path)
+			}
+		})
+	}
+}
