@@ -659,3 +659,26 @@ func TestAssignRolesDoesNotAllocate(t *testing.T) {
 		}
 	}
 }
+
+func TestTimeOfAText(t *testing.T) {
+	want := time.Date(2026, 10, 11, 12, 0, 0, 0, time.UTC)
+	zone := time.FixedZone("test", 3*60*60)
+
+	for text, loc := range map[string]*time.Location{
+		"2026-10-11T12:00:00Z":      nil,
+		"2026-10-11T15:00:00+03:00": time.UTC,
+		"2026-10-11 12:00:00":       time.UTC,
+		"2026-10-11 15:00:00":       zone,
+		"1791720000":                nil,
+		"1791720000000":             zone,
+	} {
+		if got, ok := Time([]byte(text), loc); !ok || !got.Equal(want) {
+			t.Errorf("Time(%q, %v) = %v, %v; want %v", text, loc, got, ok, want)
+		}
+	}
+	for _, text := range []string{"", "yesterday", "12:00", "2026-10-11", "42"} {
+		if got, ok := Time([]byte(text), time.UTC); ok || !got.IsZero() {
+			t.Errorf("Time(%q) = %v, %v; want no time", text, got, ok)
+		}
+	}
+}

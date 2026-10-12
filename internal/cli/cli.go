@@ -6,9 +6,9 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/ai-fn/logpretty/internal/entry"
+	"github.com/ai-fn/logpretty/internal/filter"
 	"github.com/ai-fn/logpretty/internal/linereader"
 	"github.com/ai-fn/logpretty/internal/render"
 	"github.com/ai-fn/logpretty/internal/term"
@@ -90,20 +90,11 @@ func newFlagSet(f *flags) *flag.FlagSet {
 		return err
 	})
 	fs.Func("level", "", func(s string) (err error) {
-		f.Level, err = parseLevel(s)
+		f.Level, err = filter.ParseLevel(s)
 		return err
 	})
 	fs.BoolVar(&f.version, "version", false, "")
 	return fs
-}
-
-// parseLevel reads a level by the names the parser knows, so "warning" and "ERR" work as they do in a log.
-// The offsets of slog are turned down: "info+2" would read as a level above info and filter as info.
-func parseLevel(s string) (entry.Level, error) {
-	if level := entry.ParseLevel([]byte(s)); level != entry.LevelUnknown && !strings.ContainsAny(s, "+- \t\r\n") {
-		return level, nil
-	}
-	return entry.LevelUnknown, fmt.Errorf("invalid level %q: want trace, debug, info, warn, error or fatal", s)
 }
 
 // WriteError reports arguments that Parse turned down. The flag package echoes an argument as it was typed,

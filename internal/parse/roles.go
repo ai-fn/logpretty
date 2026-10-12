@@ -108,6 +108,11 @@ func parseLevel(v entry.Value) entry.Level {
 	return entry.LevelUnknown
 }
 
+// Time reads a time the way the time of an entry is read, for a caller that has a text and no field.
+func Time(text []byte, loc *time.Location) (time.Time, bool) {
+	return parseTime(entry.Value{Raw: text, Kind: entry.KindString}, loc)
+}
+
 // parseTime reads a timestamp: a date and time, or a Unix time in seconds, milli-, micro- or nanoseconds.
 // A time without a zone is in loc, any other comes back in UTC.
 func parseTime(v entry.Value, loc *time.Location) (time.Time, bool) {

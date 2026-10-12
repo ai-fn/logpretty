@@ -5,8 +5,14 @@ import (
 	"errors"
 	"math/big"
 	"regexp"
+	"slices"
 	"strconv"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/ai-fn/logpretty/internal/entry"
+	"github.com/ai-fn/logpretty/internal/parse"
 )
 
 // The grammar of an expression written once more, as a regular expression: a key, then maybe an operator
@@ -144,6 +150,105 @@ func FuzzNumber(f *testing.F) {
 		}
 		if got != want {
 			t.Fatalf("%s compare %s = %d, want %d", x, y, got, want)
+		}
+	})
+}
+
+// quoteToken writes a text as a quoted token of an expression.
+func quoteToken(s string) string {
+	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s) + `"`
+}
+
+func FuzzKeep(f *testing.F) {
+	lines := []string{
+		`{"time":"2026-10-11T12:00:00Z","level":"warn","msg":"slow request","user_id":42,"http":{"status":502},"note":"a \"b\"\n"}`,
+		`time=2026-10-11T12:00:00Z level=info msg="request done" status=200 word`,
+		`{"level":"bogus","time":"yesterday","msg":42,"big":9007199254740993,"ok":true,"err":null}`,
+		`web-1 | {"severity":"ERROR","message":"failed"}`, `{}`, `plain text`, ``,
+	}
+	for _, seed := range [][2]string{
+		{"user_id", "42"},
+		{"user_id", "42.0"},
+		{"http.status", "502"},
+		{"msg", "slow request"},
+		{"msg", "^slow"},
+		{"level", "warn"},
+		{"level", "bogus"},
+		{"time", "2026-10-11T12:00:00Z"},
+		{"time", "yesterday"},
+		{"note", "a \"b\"\n"},
+		{"big", "9007199254740992"},
+		{"ok", "true"},
+		{"err", "null"},
+		{"nope", ""},
+		{"", ""},
+		{"status", "2e2"},
+		{"msg", "("},
+	} {
+		for _, line := range lines {
+			f.Add([]byte(line), seed[0], seed[1])
+		}
+	}
+
+	f.Fuzz(func(t *testing.T, line []byte, key, value string) {
+		// Clipped, so that a read past the end panics instead of finding spare capacity.
+		line = slices.Clip(slices.Clone(line))
+		p := parse.Parser{Loc: time.UTC}
+		// A key in quotes is a field of that name; a bare one may be a role. Both are tried.
+		for _, k := range []string{quoteToken(key), key} {
+			// A text that is not a bare key by itself would run into the operator: "a!" and "=" make "a" and "!=".
+			if bare, err := parseExpr(k); err != nil || bare.op != opExists || bare.key != key {
+				continue
+			}
+			results := map[string]bool{}
+			for _, operator := range []string{"=", "!=", ">", ">=", "<", "<=", "~", "!~"} {
+				expression := k + operator + quoteToken(value)
+				c, err := Compile(expression, time.UTC)
+				if err != nil {
+					var syntax *SyntaxError
+					if !errors.As(err, &syntax) || syntax.Pos < 0 || syntax.Pos > len(expression) {
+						t.Fatalf("Compile(%q) error = %#v, want a SyntaxError inside the expression", expression, err)
+					}
+					continue
+				}
+				e := p.Parse(line)
+				if e.Format == entry.FormatPlain {
+					return // a plain line is not asked about its fields
+				}
+				fresh := Filter{Where: []Cond{c}}
+				results[operator] = fresh.Keep(e)
+
+				// A Filter that has seen other entries must decide the same.
+				used := Filter{Where: []Cond{c}}
+				for _, other := range []string{`{"a":"x \" y","b":{"c":{"d":1}}}`, `a=1 b="x \" y"`, `text`} {
+					used.Keep(p.Parse([]byte(other)))
+				}
+				if got := used.Keep(p.Parse(line)); got != results[operator] {
+					t.Fatalf("%s on %q: %v with a new Filter, %v with a used one", expression, line, results[operator], got)
+				}
+			}
+
+			check := func(a, b string, rule func(a, b bool) bool, what string) {
+				x, okX := results[a]
+				y, okY := results[b]
+				if okX != okY {
+					t.Fatalf("%s%s compiles and %s%s does not, or the other way", k, a, k, b)
+				}
+				if okX && !rule(x, y) {
+					t.Fatalf("%q, key %s, value %q: %s gives %v and %s gives %v, want them %s", line, k, value, a, x, b, y, what)
+				}
+			}
+			opposite := func(a, b bool) bool { return a != b }
+			notBoth := func(a, b bool) bool { return !a || !b }
+			check("=", "!=", opposite, "opposite")
+			check("~", "!~", opposite, "opposite")
+			check(">", "<=", notBoth, "not both true")
+			check(">=", "<", notBoth, "not both true")
+			check(">", "<", notBoth, "not both true")
+			// Equal by an order means equal: above-or-equal and below-or-equal together.
+			if ge, ok := results[">="]; ok && ge && results["<="] && !results["="] {
+				t.Fatalf("%q, key %s, value %q: >= and <= hold and = does not", line, k, value)
+			}
 		}
 	})
 }
