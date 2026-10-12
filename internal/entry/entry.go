@@ -64,7 +64,7 @@ type Entry struct {
 	Prefix []byte // text before the structured part, such as a container name or a timestamp
 	Format Format
 	Time   time.Time
-	Level  Level
+	Level  Level   // unknown unless a field names it; the one exception is a Serilog event without "@l", which is info
 	Fields []Field // every pair of the line, in its original order
 
 	// Positions in Fields plus one, so that the zero Entry has no roles.

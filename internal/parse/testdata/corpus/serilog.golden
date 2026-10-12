@@ -1,6 +1,6 @@
 line 1: json
   in: "{\"@t\":\"2026-10-11T12:00:00.1234567Z\",\"@mt\":\"User {Name} logged in\",\"Name\":\"bob\"}"
-  level: unknown
+  level: info
   time: 2026-10-11T12:00:00.1234567Z
   roles: time=@t level=- msg=@mt
   fields:

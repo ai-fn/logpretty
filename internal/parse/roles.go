@@ -50,6 +50,21 @@ func assignRoles(e *entry.Entry, loc *time.Location) {
 			e.SetMsgField(i)
 		}
 	}
+
+	// Serilog compact leaves "@l" out of an Information event, so "@t" without it is one.
+	if i := e.TimeField(); i >= 0 && e.LevelField() < 0 && equalFold(e.Fields[i].Key, "@t") && !hasKey(e.Fields, "@l") {
+		e.Level = entry.LevelInfo
+	}
+}
+
+// hasKey reports whether a field has the key, which is lower case, in any letter case.
+func hasKey(fields []entry.Field, lower string) bool {
+	for _, f := range fields {
+		if equalFold(f.Key, lower) {
+			return true
+		}
+	}
+	return false
 }
 
 // rank returns the position of key in keys, or len(keys). Letter case is ignored: .NET writes "Level".

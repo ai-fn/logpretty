@@ -52,7 +52,9 @@ func rolesOf(t *testing.T, e *entry.Entry) roles {
 	if (got.time == "") != (e.TimeField() < 0) {
 		t.Errorf("Time = %v with TimeField = %d: one is set without the other", e.Time, e.TimeField())
 	}
-	if (e.Level == entry.LevelUnknown) != (e.LevelField() < 0) {
+	// The one level without a field is the implied information of a Serilog event.
+	implied := e.Level == entry.LevelInfo && e.LevelField() < 0 && strings.EqualFold(got.timeKey, "@t")
+	if (e.Level == entry.LevelUnknown) != (e.LevelField() < 0) && !implied {
 		t.Errorf("Level = %v with LevelField = %d: one is set without the other", e.Level, e.LevelField())
 	}
 	return got
@@ -122,7 +124,57 @@ func TestAssignRoles(t *testing.T) {
 		{
 			name: "Serilog compact without the rendered message and the level",
 			line: `{"@t":"2026-10-11T12:00:00.1234567Z","@mt":"User {Name} logged in","Name":"bob"}`,
-			want: roles{time: "2026-10-11T12:00:00.1234567Z", timeKey: "@t", msgKey: "@mt"},
+			want: roles{"2026-10-11T12:00:00.1234567Z", entry.LevelInfo, "@t", "", "@mt"},
+		},
+		{
+			name: "Serilog compact keeps the level it names",
+			line: `{"@t":"2026-10-11T12:00:00Z","@mt":"x","@l":"Error"}`,
+			want: roles{"2026-10-11T12:00:00Z", entry.LevelError, "@t", "@l", "@mt"},
+		},
+		{
+			name: "Serilog compact with a level that cannot be read has none",
+			line: `{"@t":"2026-10-11T12:00:00Z","@mt":"x","@l":"Bogus"}`,
+			want: roles{time: "2026-10-11T12:00:00Z", timeKey: "@t", msgKey: "@mt"},
+		},
+		{
+			name: "Serilog compact with another level key uses it",
+			line: `{"@t":"2026-10-11T12:00:00Z","@mt":"x","level":"warn"}`,
+			want: roles{"2026-10-11T12:00:00Z", entry.LevelWarn, "@t", "level", "@mt"},
+		},
+		{
+			name: "Serilog compact with a level key that cannot be read is still information",
+			line: `{"@t":"2026-10-11T12:00:00Z","@mt":"x","level":"bogus"}`,
+			want: roles{"2026-10-11T12:00:00Z", entry.LevelInfo, "@t", "", "@mt"},
+		},
+		{
+			name: "Serilog compact keys in another letter case",
+			line: `{"@T":"2026-10-11T12:00:00Z","@MT":"x"}`,
+			want: roles{"2026-10-11T12:00:00Z", entry.LevelInfo, "@T", "", "@MT"},
+		},
+		{
+			name: "Serilog compact level key in another letter case",
+			line: `{"@T":"2026-10-11T12:00:00Z","@MT":"x","@L":"Bogus"}`,
+			want: roles{time: "2026-10-11T12:00:00Z", timeKey: "@T", msgKey: "@MT"},
+		},
+		{
+			name: "Serilog compact in logfmt",
+			line: `@t=2026-10-11T12:00:00Z @mt=hello Name=bob`,
+			want: roles{"2026-10-11T12:00:00Z", entry.LevelInfo, "@t", "", "@mt"},
+		},
+		{
+			name: "Serilog compact with an unreadable time",
+			line: `{"@t":"yesterday","@mt":"x"}`,
+			want: roles{msgKey: "@mt"},
+		},
+		{
+			name: "a time in another key leaves the level unknown",
+			line: `{"time":"2026-10-11T12:00:00Z","msg":"x"}`,
+			want: roles{time: "2026-10-11T12:00:00Z", timeKey: "time", msgKey: "msg"},
+		},
+		{
+			name: "the time of a lower @t key does not imply a level",
+			line: `{"time":"2026-10-11T12:00:00Z","@t":"2026-10-11T13:00:00Z"}`,
+			want: roles{time: "2026-10-11T12:00:00Z", timeKey: "time"},
 		},
 		{
 			name: "ECS",
@@ -270,6 +322,27 @@ func TestAssignRolesClearsOldRoles(t *testing.T) {
 
 	if got := rolesOf(t, e); got != (roles{}) {
 		t.Errorf("roles of an entry without known keys are %+v, want none", got)
+	}
+}
+
+// The information a Serilog event implies belongs to that event: it must not reach the next line.
+func TestAssignRolesClearsImpliedLevel(t *testing.T) {
+	e := entryOf(t, `{"@t":"2026-10-11T12:00:00Z","@mt":"x"}`)
+	if e.Level != entry.LevelInfo {
+		t.Fatalf("level = %v, want info", e.Level)
+	}
+
+	e.Fields = e.Fields[:0]
+	assignRoles(e, testLoc)
+
+	if got := rolesOf(t, e); got != (roles{}) {
+		t.Errorf("roles of an entry without fields are %+v, want none", got)
+	}
+
+	var p Parser
+	p.Parse([]byte(`{"@t":"2026-10-11T12:00:00Z","@mt":"x"}`))
+	if got := p.Parse([]byte(`a=1 b=2`)); got.Level != entry.LevelUnknown {
+		t.Errorf("level of a line after a Serilog event = %v, want unknown", got.Level)
 	}
 }
 
@@ -575,6 +648,8 @@ func TestAssignRolesDoesNotAllocate(t *testing.T) {
 		`{"level":"info","ts":1791720000.1234567,"msg":"hello"}`,
 		`time=2026-10-11T12:00:00Z level=INFO+2 msg="hello" count=3`,
 		`{"time":"yesterday","level":"notaword","msg":42,"a":1}`,
+		`{"@t":"2026-10-11T12:00:00.1234567Z","@mt":"User {Name} logged in","Name":"bob"}`,
+		`@t=2026-10-11T12:00:00Z @mt=hello Name=bob`,
 	}
 
 	for _, line := range lines {
