@@ -1,0 +1,6 @@
+\e[2m2026-10-11T12:00:00.123456789Z\e[0m \e[32mINFO\e[0m  started
+\e[2m2026-10-11T12:00:01.000000000Z\e[0m \e[32mINFO\e[0m  hello  \e[2ma=\e[0m1
+2026-10-11T12:00:02.500000000Z plain message
+\e[2m2026-10-11T12:00:03.000000000Z\e[0m \e[31mERROR\e[0m boom
+[pod/web-1/app] {"level":"info","msg":"with --prefix"}
+[pod/web-1/app] 2026-10-11T12:00:04.000000000Z {"level":"info","msg":"with --prefix and --timestamps"}

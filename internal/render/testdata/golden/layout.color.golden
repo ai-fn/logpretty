@@ -1,0 +1,16 @@
+\e[2m12:00:00.123\e[0m \e[32mINFO\e[0m  request done  \e[2mmethod=\e[0mGET \e[2mpath=\e[0m/api/v1/users \e[2mstatus=\e[0m200 \e[2mlatency=\e[0m12ms
+\e[2m12:00:01.000\e[0m \e[33mWARN\e[0m  slow query  \e[2mquery=\e[0m"SELECT * FROM users WHERE name = \"bob\"" \e[2mrows=\e[0m0 \e[2mcached=\e[0mfalse \e[2mplan=\e[0mnull
+\e[2m12:00:02.000\e[0m \e[31mERROR\e[0m upstream failed  \e[2mhttp=\e[0m{"method":"POST","url":"https://example.com/a b","headers":{"accept":"*/*"}} \e[2mretries=\e[0m[1,2,3] \e[2merr=\e[0m"dial tcp 10.0.0.1:5432: connect: connection refused"
+\e[36mDEBUG\e[0m cache miss  \e[2mkey=\e[0muser:42 \e[2mempty=\e[0m"" \e[2m"user id"=\e[0m5 \e[2m"a=b"=\e[0m1
+only a message
+\e[1;31mFATAL\e[0m
+\e[2ma=\e[0m1 \e[2mb=\e[0m"two words" \e[2mc=\e[0m[] \e[2md=\e[0m{}
+{}
+\e[2m12:00:03.000\e[0m \e[32mINFO\e[0m  multi\nline	message with \x1b[31mcolor\x1b[0m  \e[2mpath=\e[0m"C:\Program Files\app" \e[2mnote=\e[0m"привет мир"
+\e[2m12:00:04.000\e[0m \e[32mINFO\e[0m  logfmt line  verbose \e[2mretries=\e[0m3 \e[2mempty=\e[0m"" \e[2mpath=\e[0m/tmp/x
+
+\e[2mTRACE\e[0m x
+\e[2ma=\e[0m1 \e[2mb=\e[0m2
+plain line that stays as it is
+	indented with a tab
+web-1  | {}

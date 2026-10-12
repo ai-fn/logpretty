@@ -1,0 +1,7 @@
+2026/10/11 12:00:00 server started on :8080
+2026/10/11 12:00:01.123456 main.go:42: connection failed: dial tcp 10.0.0.1:5432: connect: connection refused
+2026/10/11 12:00:02 listening \e[2maddr=\e[0m:8080 \e[2mtls=\e[0mfalse
+2026/10/11 12:00:03 retry \e[2mattempt=\e[0m3/5 \e[2mdelay=\e[0m2s
+2026/10/11 12:00:04 request done (status=200, took=5ms)
+2026/10/11 12:00:05 request finished in 5ms (retries=3, \e[2mstatus=\e[0mok, \e[2mcode=\e[0m5)
+2026/10/11 12:00:06 Starting server on port=8080

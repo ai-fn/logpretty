@@ -1,0 +1,5 @@
+\e[2m12:00:00.123\e[0m \e[2mversion=\e[0m1.1 \e[2mhost=\e[0mweb-1 \e[2mshort_message=\e[0m"gelf message" \e[2mlevel=\e[0m6
+\e[2m12:00:00.000\e[0m \e[33mWARN\e[0m  underscore key
+\e[2m12:00:01.000\e[0m \e[33mWARN\e[0m  joined key
+\e[32mINFO\e[0m  go time.Time.String  \e[2mtime=\e[0m"2026-10-11 12:00:03 +0000 UTC"
+<14>Oct 11 12:00:00 web-1 app[4242]: syslog line

@@ -1,0 +1,4 @@
+\e[2m12:00:00.123\e[0m \e[32mINFO\e[0m  Started  \e[2mEventId=\e[0m0 \e[2mCategory=\e[0mProgram \e[2mState=\e[0m{"Message":"Started","{OriginalFormat}":"Started"}
+\e[2m12:00:01.123\e[0m \e[31mERROR\e[0m Failed  \e[2mEventId=\e[0m7 \e[2mCategory=\e[0mProgram \e[2mException=\e[0m"System.Exception: boom"
+info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://localhost:5000

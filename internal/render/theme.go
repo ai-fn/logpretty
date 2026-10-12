@@ -13,6 +13,27 @@ type Theme struct {
 	Reset  string
 }
 
+// DefaultTheme uses the 16 basic colors and faint: they follow the palette of the terminal, and a terminal
+// without faint shows that text as usual.
+func DefaultTheme() Theme {
+	const faint = "\x1b[2m"
+	return Theme{
+		Time: faint,
+		Level: [...]string{
+			entry.LevelTrace: faint,
+			entry.LevelDebug: "\x1b[36m",
+			entry.LevelInfo:  "\x1b[32m",
+			entry.LevelWarn:  "\x1b[33m",
+			entry.LevelError: "\x1b[31m",
+			entry.LevelFatal: "\x1b[1;31m",
+		},
+		Key:    faint,
+		Prefix: faint,
+		Marker: "\x1b[33m",
+		Reset:  "\x1b[0m",
+	}
+}
+
 // end closes a part that style opened; a part without a style was never opened.
 func (t *Theme) end(dst []byte, style string) []byte {
 	if style == "" {

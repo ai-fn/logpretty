@@ -1,0 +1,5 @@
+\e[2m12:00:00.000\e[0m \e[32mINFO\e[0m  hello
+\e[2m12:00:00.000\e[0m \e[31mERROR\e[0m failed  \e[2merror=\e[0mboom
+\e[2m09:00:00.123\e[0m \e[36mDEBUG\e[0m cache miss  \e[2mservice=\e[0mapi \e[2mcaller=\e[0mmain.go:10
+\e[2m12:00:00.123\e[0m \e[33mWARN\e[0m  timestamps in milliseconds
+12:00PM INF server started port=8080

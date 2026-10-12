@@ -335,7 +335,7 @@ func TestRenderDoesNotAllocate(t *testing.T) {
 		"\ufeffplain with \x1b and \xff",
 		``,
 	}
-	for _, theme := range []Theme{{}, tags} {
+	for _, theme := range []Theme{{}, tags, DefaultTheme()} {
 		// The zone is set: the first use of time.Local loads it, which allocates once.
 		r := Renderer{Theme: theme, Loc: testLoc}
 		dst := make([]byte, 0, 4096)

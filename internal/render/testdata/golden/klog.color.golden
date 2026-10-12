@@ -1,0 +1,4 @@
+I1011 12:00:00.123456   12345 main.go:42] Starting server
+W1011 12:00:01.000002   12345 controller.go:10] Something odd happened
+E1011 12:00:02.000003   12345 controller.go:10] "Failed to sync" \e[2merr=\e[0mtimeout \e[2mkey=\e[0mns/x
+I1011 12:00:03.000004   12345 reconciler.go:7] "Reconciled" \e[2mpod=\e[0mns/web-1 \e[2mduration=\e[0m12ms

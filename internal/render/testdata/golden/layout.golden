@@ -13,3 +13,4 @@ TRACE x
 a=1 b=2
 plain line that stays as it is
 	indented with a tab
+web-1  | {}

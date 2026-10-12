@@ -173,6 +173,50 @@ func checkLine(t *testing.T, what string, line []byte, got string) {
 	checkNothingUnsafe(t, what, string(line), text)
 }
 
+// stripStyles removes the styles of the default theme and checks that each one wraps some text and is
+// closed before the next one opens and before the line ends.
+func stripStyles(t *testing.T, what string, line []byte, got string) string {
+	t.Helper()
+	th := DefaultTheme()
+	reset := th.Reset
+	styles := append([]string{th.Time, th.Key, th.Prefix, th.Marker}, th.Level[entry.LevelTrace:]...)
+	var text strings.Builder
+	rest, ok := strings.CutSuffix(got, "\n")
+	if !ok {
+		t.Fatalf("%s of %q is %q, want a newline at the very end", what, line, got)
+	}
+	open := false
+	for {
+		start := strings.IndexByte(rest, 0x1b)
+		if start < 0 {
+			break
+		}
+		end := strings.IndexByte(rest[start:], 'm')
+		if end < 0 {
+			t.Fatalf("%s of %q is %q, want every escape character to start a style", what, line, got)
+		}
+		style := rest[start : start+end+1]
+		switch {
+		case style != reset && !slices.Contains(styles, style):
+			t.Fatalf("%s of %q is %q: %q is neither a style of the theme nor %q", what, line, got, style, reset)
+		case style == reset && !open:
+			t.Fatalf("%s of %q is %q: a style is closed that was not opened", what, line, got)
+		case style == reset && start == 0:
+			t.Fatalf("%s of %q is %q: a style wraps nothing", what, line, got)
+		case style != reset && open:
+			t.Fatalf("%s of %q is %q: a style opens inside another", what, line, got)
+		}
+		open = style != reset
+		text.WriteString(rest[:start])
+		rest = rest[start+end+1:]
+	}
+	if open {
+		t.Fatalf("%s of %q is %q: the last style is left open", what, line, got)
+	}
+	text.WriteString(rest)
+	return text.String() + "\n"
+}
+
 func FuzzRender(f *testing.F) {
 	for _, seed := range []string{
 		`{"time":"2026-10-11T12:00:00.123Z","level":"warn","msg":"slow request","latency":"12ms","status":200}`,
@@ -222,6 +266,17 @@ func FuzzRender(f *testing.F) {
 		want := referenceSafe(strings.TrimPrefix(string(line), "\ufeff")) + "…[+" + string(appendSize(nil, dropped)) + "]\n"
 		if cut != want {
 			t.Fatalf("truncated line %q\n got %q\nwant %q", line, cut, want)
+		}
+
+		// Color adds styles and nothing else.
+		colored := Renderer{Theme: DefaultTheme(), Loc: testLoc}
+		styled := string(colored.AppendEntry(nil, p.Parse(line)))
+		if text := stripStyles(t, "the colored entry", line, styled); text != got[1:] {
+			t.Fatalf("line %q in color, styles removed\n got %q\nwant %q", line, text, got[1:])
+		}
+		styled = string(colored.AppendTruncated(nil, line, dropped))
+		if text := stripStyles(t, "the colored truncated line", line, styled); text != cut {
+			t.Fatalf("truncated line %q in color, styles removed\n got %q\nwant %q", line, text, cut)
 		}
 	})
 }

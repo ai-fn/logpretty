@@ -1,0 +1,14 @@
+panic: runtime error: index out of range [5] with length 3
+
+goroutine 1 [running]:
+main.f(0xc000012345, 0x1)
+	/app/main.go:30 +0x45
+main.main()
+	/app/main.go:12 +0x1d
+
+goroutine 7 [chan receive]:
+main.worker()
+	/app/main.go:40 +0x2a
+created by main.main in goroutine 1
+	/app/main.go:8 +0x2a
+exit status 2
