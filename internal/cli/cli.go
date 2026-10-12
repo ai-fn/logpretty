@@ -6,7 +6,9 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"strings"
 
+	"github.com/ai-fn/logpretty/internal/entry"
 	"github.com/ai-fn/logpretty/internal/linereader"
 	"github.com/ai-fn/logpretty/internal/render"
 	"github.com/ai-fn/logpretty/internal/term"
@@ -17,6 +19,7 @@ type Config struct {
 	MaxLine int // the longest line to keep, in bytes
 	UTC     bool
 	Color   term.ColorMode
+	Level   entry.Level // the lowest level to show; LevelUnknown shows every entry
 }
 
 // ErrHelp is what Parse returns when the arguments ask for the help; it is a request, not a failure.
@@ -29,6 +32,10 @@ Pretty-print JSON, logfmt and plain-text logs read from stdin. The format of
 every line is detected on its own, so mixed streams need no flags.
 
 Flags:
+      --level LEVEL     show the entries of this level or above: trace, debug,
+                        info, warn, error or fatal. An entry without a level
+                        is hidden, and so are the plain lines after a hidden
+                        entry, such as its stack trace
       --color WHEN      color the output: auto (only on a terminal, the
                         default), always or never
       --utc             show times in UTC instead of the local time zone
@@ -39,6 +46,7 @@ Flags:
 
 Examples:
   kubectl logs -f pod | logpretty
+  kubectl logs -f pod | logpretty --level warn
   docker compose logs -f | logpretty --utc
   logpretty --color=always < app.log | less -R
 `
@@ -81,8 +89,21 @@ func newFlagSet(f *flags) *flag.FlagSet {
 		f.Color, err = term.ParseColorMode(s)
 		return err
 	})
+	fs.Func("level", "", func(s string) (err error) {
+		f.Level, err = parseLevel(s)
+		return err
+	})
 	fs.BoolVar(&f.version, "version", false, "")
 	return fs
+}
+
+// parseLevel reads a level by the names the parser knows, so "warning" and "ERR" work as they do in a log.
+// The offsets of slog are turned down: "info+2" would read as a level above info and filter as info.
+func parseLevel(s string) (entry.Level, error) {
+	if level := entry.ParseLevel([]byte(s)); level != entry.LevelUnknown && !strings.ContainsAny(s, "+- \t\r\n") {
+		return level, nil
+	}
+	return entry.LevelUnknown, fmt.Errorf("invalid level %q: want trace, debug, info, warn, error or fatal", s)
 }
 
 // WriteError reports arguments that Parse turned down. The flag package echoes an argument as it was typed,

@@ -1,0 +1,32 @@
+# --level keeps the entries of that level and above; a plain line goes the way of the entry before it.
+stdin input.log
+exec logpretty --utc --level warn
+cmp stdout want
+! stderr .
+
+# Without the flag every line is shown.
+stdin input.log
+exec logpretty --utc
+stdout '^banner$'
+stdout 'INFO  started$'
+stdout '^no level$'
+
+! exec logpretty --level loud
+stderr '^logpretty: invalid value "loud" for flag -level: invalid level "loud": want trace, debug, info, warn, error or fatal$'
+! stdout .
+
+-- input.log --
+banner
+{"time":"2026-10-11T12:00:00Z","level":"info","msg":"started"}
+  hidden with the entry above
+{"time":"2026-10-11T12:00:01Z","level":"error","msg":"request failed","code":500}
+panic: boom
+	main.go:30 +0x45
+level=warn msg="slow request" latency=1.2s
+{"msg":"no level"}
+level=debug msg=tick
+-- want --
+12:00:01.000 ERROR request failed  code=500
+panic: boom
+	main.go:30 +0x45
+WARN  slow request  latency=1.2s

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ai-fn/logpretty/internal/entry"
 	"github.com/ai-fn/logpretty/internal/golden"
 	"github.com/ai-fn/logpretty/internal/linereader"
 	"github.com/ai-fn/logpretty/internal/term"
@@ -49,6 +50,10 @@ func TestParse(t *testing.T) {
 			args: []string{"--color=always", "--color=never", "--max-line=1", "--max-line=2"},
 			want: Config{MaxLine: 2, Color: term.ColorNever},
 		},
+		{name: "level", args: []string{"--level", "warn"}, want: Config{MaxLine: linereader.DefaultMaxLine, Level: entry.LevelWarn}},
+		{name: "every level", args: []string{"--level=trace", "--level=debug", "--level=info", "--level=error", "--level=fatal"}, want: Config{MaxLine: linereader.DefaultMaxLine, Level: entry.LevelFatal}},
+		{name: "level as a log spells it", args: []string{"-level=WARNING"}, want: Config{MaxLine: linereader.DefaultMaxLine, Level: entry.LevelWarn}},
+		{name: "level in its short form", args: []string{"--level", "Err"}, want: Config{MaxLine: linereader.DefaultMaxLine, Level: entry.LevelError}},
 		{name: "double dash ends the flags", args: []string{"--"}, want: defaults},
 		{name: "max-line with a unit", args: []string{"--max-line", "64K"}, want: Config{MaxLine: 64 << 10}},
 		{name: "max-line with a unit spelled out", args: []string{"--max-line=2MiB"}, want: Config{MaxLine: 2 << 20}},
@@ -67,6 +72,15 @@ func TestParse(t *testing.T) {
 		{name: "color of an unknown kind", args: []string{"--color=sometimes"}, wantErr: `invalid color mode "sometimes": want auto, always or never`},
 		{name: "color in another case", args: []string{"--color=Always"}, wantErr: `invalid color mode "Always"`},
 		{name: "color with an empty value", args: []string{"--color="}, wantErr: `invalid color mode ""`},
+		{name: "level of an unknown name", args: []string{"--level", "loud"}, wantErr: `invalid value "loud" for flag -level: invalid level "loud": want trace, debug, info, warn, error or fatal`},
+		{name: "level as a number", args: []string{"--level=40"}, wantErr: `invalid level "40"`},
+		{name: "level with an empty value", args: []string{"--level="}, wantErr: `invalid level ""`},
+		{name: "level spelled unknown", args: []string{"--level=unknown"}, wantErr: `invalid level "unknown"`},
+		{name: "level with a space", args: []string{"--level", " warn"}, wantErr: `invalid level " warn"`},
+		{name: "level with a newline", args: []string{"--level", "warn\n"}, wantErr: `invalid level "warn\n"`},
+		{name: "level with an offset above", args: []string{"--level", "info+2"}, wantErr: `invalid level "info+2"`},
+		{name: "level with an offset below", args: []string{"--level", "debug-4"}, wantErr: `invalid level "debug-4"`},
+		{name: "level without its value", args: []string{"--level"}, wantErr: "flag needs an argument: -level"},
 		{name: "utc with a value that is not a boolean", args: []string{"--utc=maybe"}, wantErr: `invalid boolean value "maybe" for -utc`},
 		{name: "a lone dash is an argument", args: []string{"-"}, wantErr: `unexpected argument "-"`},
 		{name: "an empty argument", args: []string{""}, wantErr: `unexpected argument ""`},

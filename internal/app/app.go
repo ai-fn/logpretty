@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ai-fn/logpretty/internal/cli"
+	"github.com/ai-fn/logpretty/internal/filter"
 	"github.com/ai-fn/logpretty/internal/linereader"
 	"github.com/ai-fn/logpretty/internal/parse"
 	"github.com/ai-fn/logpretty/internal/render"
@@ -38,8 +39,9 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	}
 
 	p := &pipeline{
-		r: linereader.New(stdin, cfg.MaxLine),
-		w: bufio.NewWriterSize(stdout, writeBufferSize),
+		r:      linereader.New(stdin, cfg.MaxLine),
+		w:      bufio.NewWriterSize(stdout, writeBufferSize),
+		filter: filter.Filter{MinLevel: cfg.Level},
 	}
 	if cfg.UTC {
 		// The same zone for both, so that a time written without one is shown as it was written.
@@ -97,6 +99,7 @@ type pipeline struct {
 	w *bufio.Writer
 
 	parser   parse.Parser
+	filter   filter.Filter
 	renderer render.Renderer
 	out      []byte
 
@@ -155,9 +158,16 @@ func (p *pipeline) burst(line []byte, dropped int, readErr error) (done bool, er
 // A line that was cut is not parsed: what is left of it says little about its format.
 func (p *pipeline) write(line []byte, dropped int) error {
 	if dropped > 0 {
+		if !p.filter.KeepPlain() {
+			return nil
+		}
 		p.out = p.renderer.AppendTruncated(p.out[:0], line, dropped)
 	} else {
-		p.out = p.renderer.AppendEntry(p.out[:0], p.parser.Parse(line))
+		e := p.parser.Parse(line)
+		if !p.filter.Keep(e) {
+			return nil
+		}
+		p.out = p.renderer.AppendEntry(p.out[:0], e)
 	}
 	_, err := p.w.Write(p.out)
 	return err

@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/ai-fn/logpretty/internal/cli"
+	"github.com/ai-fn/logpretty/internal/entry"
 )
 
 type failWriter struct{}
@@ -104,6 +105,22 @@ func TestRun(t *testing.T) {
 		{name: "a truncated line is not parsed", args: []string{"-max-line", "8"}, in: `{"msg":"a"}` + "\n", wantOut: `{"msg":"…[+3B]` + "\n"},
 		{name: "a line of exactly max-line is parsed", args: []string{"-max-line", "11"}, in: `{"msg":"a"}` + "\n", wantOut: "a\n"},
 
+		{
+			name: "level keeps the entries of that level and above, with the plain lines after them",
+			args: []string{"--level", "warn"},
+			in: "banner\n" + `{"level":"info","msg":"started"}` + "\n  after info\n" + `{"level":"error","msg":"failed"}` + "\npanic: boom\n\tmain.go:30\n" +
+				"level=warn msg=slow\n" + `{"msg":"no level"}` + "\nafter no level\n",
+			wantOut: "ERROR failed\npanic: boom\n\tmain.go:30\nWARN  slow\n",
+		},
+		{name: "level as a log spells it", args: []string{"--level=WARNING"}, in: "level=info msg=a\nlevel=warn msg=b\n", wantOut: "WARN  b\n"},
+		{name: "level that nothing passes leaves the output empty", args: []string{"--level", "fatal"}, in: "level=error msg=a\ntext\n"},
+		{
+			name:    "a cut line goes the way of the entry before it",
+			args:    []string{"--level", "warn", "--max-line", "20"},
+			in:      x(30) + "\nlevel=warn msg=a\n" + x(30) + "\nlevel=info msg=b\n" + x(30) + "\n",
+			wantOut: "WARN  a\n" + x(20) + "…[+10B]\n",
+		},
+
 		{name: "huge max-line allocates nothing up front", args: []string{"--max-line=" + strconv.Itoa(math.MaxInt)}, in: "abc\n", wantOut: "abc\n"},
 		{name: "double dash ends the flags", args: []string{"--"}, in: "abc\n", wantOut: "abc\n"},
 
@@ -153,6 +170,7 @@ func TestRunArgumentErrors(t *testing.T) {
 		{name: "positional argument after double dash", args: []string{"--", "file.log"}, want: `unexpected argument "file.log"`},
 		{name: "max-line zero", args: []string{"--max-line", "0"}, want: `invalid value "0" for flag -max-line: want a positive size in bytes, such as 4096, 64K or 1M`},
 		{name: "color of an unknown kind", args: []string{"--color=sometimes"}, want: `invalid value "sometimes" for flag -color: invalid color mode "sometimes": want auto, always or never`},
+		{name: "level of an unknown name", args: []string{"--level", "loud"}, want: `invalid value "loud" for flag -level: invalid level "loud": want trace, debug, info, warn, error or fatal`},
 		{name: "control characters in an argument", args: []string{"--\x1b[31m"}, want: `flag provided but not defined: -\x1b[31m`},
 	}
 	for _, tt := range tests {
@@ -265,6 +283,10 @@ func TestWriteDoesNotAllocate(t *testing.T) {
 	for _, loc := range []*time.Location{nil, time.UTC} {
 		p := &pipeline{w: bufio.NewWriterSize(io.Discard, writeBufferSize)}
 		p.parser.Loc, p.renderer.Loc = loc, loc
+		// With a level asked for, the lines below are kept or dropped alike without a cost.
+		if loc != nil {
+			p.filter.MinLevel = entry.LevelInfo
+		}
 
 		for _, line := range lines {
 			if raceEnabled && strings.HasPrefix(line, "{") {

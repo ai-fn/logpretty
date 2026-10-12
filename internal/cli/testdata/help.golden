@@ -4,6 +4,10 @@ Pretty-print JSON, logfmt and plain-text logs read from stdin. The format of
 every line is detected on its own, so mixed streams need no flags.
 
 Flags:
+      --level LEVEL     show the entries of this level or above: trace, debug,
+                        info, warn, error or fatal. An entry without a level
+                        is hidden, and so are the plain lines after a hidden
+                        entry, such as its stack trace
       --color WHEN      color the output: auto (only on a terminal, the
                         default), always or never
       --utc             show times in UTC instead of the local time zone
@@ -14,5 +18,6 @@ Flags:
 
 Examples:
   kubectl logs -f pod | logpretty
+  kubectl logs -f pod | logpretty --level warn
   docker compose logs -f | logpretty --utc
   logpretty --color=always < app.log | less -R

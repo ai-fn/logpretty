@@ -1,6 +1,7 @@
 # --help prints the help to stdout and succeeds; -h is the same.
 exec logpretty --help
 stdout '^Usage: logpretty \[flags\] < input$'
+stdout '^      --level LEVEL '
 stdout '^      --color WHEN '
 stdout '^      --utc '
 stdout '^      --max-line SIZE '
