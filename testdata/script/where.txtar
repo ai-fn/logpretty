@@ -1,0 +1,57 @@
+# --where keeps the entries that meet the expression, whatever their format; a plain line goes the way of
+# the entry before it. A number in quotes is a number too.
+stdin input.log
+exec logpretty --utc --where 'user_id=42'
+cmp stdout want
+! stderr .
+
+# A key with dots looks into a nested object, and a flag given twice asks for both conditions.
+stdin input.log
+exec logpretty --utc --where 'http.status >= 500' --where 'msg~^request'
+cmp stdout want_nested
+! stderr .
+
+# A time without a zone is read in the zone of --utc, here given after the expression.
+stdin input.log
+exec logpretty --where 'time>=2026-10-11T12:00:02' --utc
+cmp stdout want_time
+! stderr .
+
+# An expression that cannot be read is shown with a caret under the trouble, and the input is not read.
+stdin input.log
+! exec logpretty --where 'user_id=>42'
+cmp stderr want_error
+! stdout .
+
+! exec logpretty --where 'latency>100ms'
+stderr '^logpretty: --where ''latency>100ms''$'
+stderr '^ {28}\^ "100ms" is not a number, and >, >=, < and <= compare numbers$'
+stderr '^Run ''logpretty --help'' for usage\.$'
+! stdout .
+
+-- input.log --
+banner
+{"time":"2026-10-11T12:00:00Z","level":"info","msg":"started","user_id":7}
+  hidden with the entry above
+{"time":"2026-10-11T12:00:01Z","level":"error","msg":"request failed","user_id":42,"http":{"status":502}}
+panic: boom
+	main.go:30 +0x45
+level=warn msg="slow request" user_id=42 latency=1.2s
+{"time":"2026-10-11T12:00:02Z","level":"info","msg":"request done","user_id":"42","http":{"status":200}}
+level=debug msg=tick
+-- want --
+12:00:01.000 ERROR request failed  user_id=42 http={"status":502}
+panic: boom
+	main.go:30 +0x45
+WARN  slow request  user_id=42 latency=1.2s
+12:00:02.000 INFO  request done  user_id=42 http={"status":200}
+-- want_nested --
+12:00:01.000 ERROR request failed  user_id=42 http={"status":502}
+panic: boom
+	main.go:30 +0x45
+-- want_time --
+12:00:02.000 INFO  request done  user_id=42 http={"status":200}
+-- want_error --
+logpretty: --where 'user_id=>42'
+                            ^ unexpected '>'
+Run 'logpretty --help' for usage.

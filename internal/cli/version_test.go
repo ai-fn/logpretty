@@ -2,6 +2,7 @@ package cli
 
 import (
 	"errors"
+	"reflect"
 	"runtime/debug"
 	"strings"
 	"testing"
@@ -56,16 +57,17 @@ func TestParseVersion(t *testing.T) {
 		{"-version"},
 		{"--version=true"},
 		{"--utc", "--version"},
-		// Like the help, it is all that is asked for: the rest is not checked.
+		{"--version", "--where", "a=1"},
+		// An argument that is not a flag is not looked at.
 		{"--version", "file.log"},
 	} {
 		got, err := Parse(args)
-		if !errors.Is(err, ErrVersion) || got != (Config{}) {
+		if !errors.Is(err, ErrVersion) || !reflect.DeepEqual(got, Config{}) {
 			t.Errorf("Parse(%q) = %+v, %v; want the zero Config and ErrVersion", args, got, err)
 		}
 	}
 
-	if got, err := Parse([]string{"--version=false"}); err != nil || got != (Config{MaxLine: linereader.DefaultMaxLine}) {
+	if got, err := Parse([]string{"--version=false"}); err != nil || !reflect.DeepEqual(got, Config{MaxLine: linereader.DefaultMaxLine}) {
 		t.Errorf("Parse(--version=false) = %+v, %v; want the defaults", got, err)
 	}
 	for _, args := range [][]string{{"--version", "--help"}, {"--help", "--version"}} {
@@ -80,7 +82,11 @@ func TestParseVersion(t *testing.T) {
 		{"--", "--version"},
 		// The flags end at the first argument that is not one, so the request is not seen.
 		{"file.log", "--version"},
+		// The value of a flag is checked wherever the flag stands.
 		{"--max-line=0", "--version"},
+		{"--version", "--max-line=0"},
+		{"--where", "a=>1", "--version"},
+		{"--version", "--where", "a=>1"},
 	} {
 		if _, err := Parse(args); err == nil || errors.Is(err, ErrVersion) {
 			t.Errorf("Parse(%q) error = %v, want a failure that is not ErrVersion", args, err)

@@ -20,6 +20,7 @@ import (
 
 	"github.com/ai-fn/logpretty/internal/cli"
 	"github.com/ai-fn/logpretty/internal/entry"
+	"github.com/ai-fn/logpretty/internal/filter"
 )
 
 type failWriter struct{}
@@ -121,6 +122,39 @@ func TestRun(t *testing.T) {
 			wantOut: "WARN  a\n" + x(20) + "…[+10B]\n",
 		},
 
+		{
+			name: "where keeps the entries that meet it, with the plain lines after them",
+			args: []string{"--where", "user_id=42"},
+			in: "banner\n" + `{"msg":"a","user_id":42}` + "\n  after a\n" + `{"msg":"b","user_id":7}` + "\n  after b\n" +
+				"msg=c user_id=42\n" + `{"msg":"no user"}` + "\nafter no user\n",
+			wantOut: "a  user_id=42\n  after a\nc  user_id=42\n",
+		},
+		{
+			name:    "where given twice asks for both",
+			args:    []string{"--where", "user_id=42", "--where", "http.status>=500"},
+			in:      `{"msg":"a","user_id":42,"http":{"status":502}}` + "\n" + `{"msg":"b","user_id":42,"http":{"status":200}}` + "\n" + `{"msg":"c","user_id":7,"http":{"status":502}}` + "\n",
+			wantOut: `a  user_id=42 http={"status":502}` + "\n",
+		},
+		{
+			name:    "where and level together",
+			args:    []string{"--level", "warn", "--where", "msg~^slow"},
+			in:      "level=warn msg=\"slow request\"\nlevel=info msg=\"slow start\"\nlevel=error msg=failed\n",
+			wantOut: "WARN  slow request\n",
+		},
+		{name: "where that nothing meets leaves the output empty", args: []string{"--where", "user_id"}, in: "level=error msg=a\ntext\n"},
+		{
+			name:    "where reads a time without a zone as local",
+			args:    []string{"--where", "time>=2026-10-11T12:00:00"},
+			in:      `{"time":"2026-10-11T10:00:00Z","msg":"early"}` + "\n" + `{"time":"2026-10-11T12:30:00Z","msg":"late"}` + "\n",
+			wantOut: "13:00:00.000 early\n15:30:00.000 late\n",
+		},
+		{
+			name:    "utc after where still sets the zone of its time",
+			args:    []string{"--where", "time>=2026-10-11T12:00:00", "--utc"},
+			in:      `{"time":"2026-10-11T10:00:00Z","msg":"early"}` + "\n" + `{"time":"2026-10-11T12:30:00Z","msg":"late"}` + "\n",
+			wantOut: "12:30:00.000 late\n",
+		},
+
 		{name: "huge max-line allocates nothing up front", args: []string{"--max-line=" + strconv.Itoa(math.MaxInt)}, in: "abc\n", wantOut: "abc\n"},
 		{name: "double dash ends the flags", args: []string{"--"}, in: "abc\n", wantOut: "abc\n"},
 
@@ -158,7 +192,7 @@ func TestRun(t *testing.T) {
 	}
 }
 
-// The shape of a failure: one line, the hint, nothing else. The arguments are tested in internal/cli.
+// The shape of a failure: one line, or two for an expression, then the hint. The arguments are tested in internal/cli.
 func TestRunArgumentErrors(t *testing.T) {
 	tests := []struct {
 		name string
@@ -172,6 +206,12 @@ func TestRunArgumentErrors(t *testing.T) {
 		{name: "color of an unknown kind", args: []string{"--color=sometimes"}, want: `invalid value "sometimes" for flag -color: invalid color mode "sometimes": want auto, always or never`},
 		{name: "level of an unknown name", args: []string{"--level", "loud"}, want: `invalid value "loud" for flag -level: invalid level "loud": want trace, debug, info, warn, error or fatal`},
 		{name: "control characters in an argument", args: []string{"--\x1b[31m"}, want: `flag provided but not defined: -\x1b[31m`},
+		{name: "where expression", args: []string{"--where", "user_id=>42"}, want: "--where 'user_id=>42'\n" + strings.Repeat(" ", 28) + "^ unexpected '>'"},
+		{
+			name: "control characters in a where expression",
+			args: []string{"--where", "a\x1b[31m=>1"},
+			want: `--where 'a\x1b[31m=>1'` + "\n" + strings.Repeat(" ", 30) + "^ unexpected '>'",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -283,9 +323,13 @@ func TestWriteDoesNotAllocate(t *testing.T) {
 	for _, loc := range []*time.Location{nil, time.UTC} {
 		p := &pipeline{w: bufio.NewWriterSize(io.Discard, writeBufferSize)}
 		p.parser.Loc, p.renderer.Loc = loc, loc
-		// With a level asked for, the lines below are kept or dropped alike without a cost.
+		// With a level and a condition asked for, the lines below are kept or dropped alike without a cost.
 		if loc != nil {
-			p.filter.MinLevel = entry.LevelInfo
+			cond, err := filter.Compile("status>=200", loc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			p.filter.MinLevel, p.filter.Where = entry.LevelInfo, []filter.Cond{cond}
 		}
 
 		for _, line := range lines {

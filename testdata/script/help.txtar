@@ -2,11 +2,13 @@
 exec logpretty --help
 stdout '^Usage: logpretty \[flags\] < input$'
 stdout '^      --level LEVEL '
+stdout '^      --where EXPR '
 stdout '^      --color WHEN '
 stdout '^      --utc '
 stdout '^      --max-line SIZE '
 stdout '^      --version '
 stdout '^  -h, --help '
+stdout '^Expressions:$'
 stdout '^Examples:$'
 ! stderr .
 cp stdout long

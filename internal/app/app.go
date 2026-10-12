@@ -41,7 +41,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	p := &pipeline{
 		r:      linereader.New(stdin, cfg.MaxLine),
 		w:      bufio.NewWriterSize(stdout, writeBufferSize),
-		filter: filter.Filter{MinLevel: cfg.Level},
+		filter: filter.Filter{MinLevel: cfg.Level, Where: cfg.Where},
 	}
 	if cfg.UTC {
 		// The same zone for both, so that a time written without one is shown as it was written.
