@@ -240,12 +240,12 @@ inside the double quotes. Between a pair of `\"` the shell takes them for its ow
 before each one there: `--where "msg~\"^^slow request^|failed\""`.
 
 PowerShell takes the single quotes, but it cannot read a file with `<`, so pipe the file in:
-`Get-Content app.log | logpretty`. It reads an unquoted comma as a list and passes its items as
-separate arguments, so put the fields in quotes there: `--fields 'msg,latency'`. Windows PowerShell
-5.1 drops the double quotes inside an argument, so write `\"` for each of them there, as in
-`--where 'msg=\"slow request\"'`; PowerShell 7.3 and later passes them as they are. A pipe of
-Windows PowerShell 5.1 also turns the characters outside ASCII into `?`, which
-`cmd /c "logpretty < app.log"` does not.
+`Get-Content app.log | logpretty`. Windows PowerShell 5.1 does not pass the double quotes inside an
+argument as they are written. Put `--%` before the arguments there, which makes it pass the rest of
+the line as it is written, so a single quote is no quote there and a quote inside double quotes is
+`\"`: `logpretty --% --where "msg=\"slow request\""`. PowerShell 7.3 and later passes the quotes
+as they are. A pipe of Windows PowerShell 5.1 also turns the characters outside ASCII into `?`,
+which `cmd /c "logpretty < app.log"` does not.
 
 ### Recipes
 

@@ -50,11 +50,11 @@ func TestShellQuoting(t *testing.T) {
 		{name: "a file read with < keeps its bytes", shells: []string{cmdExe}, command: `logpretty`, input: "{\"msg\":\"café\"}\n", want: "café\n"},
 
 		{name: "single quotes", shells: []string{powershell5, powershell7}, command: `logpretty --utc --where 'user_id=42'`, want: both},
+		// A list written with no space after its comma reaches a program as it is written.
 		{
-			name: "comma in quotes", shells: []string{powershell5, powershell7}, command: `logpretty --utc --fields 'msg,latency'`,
+			name: "comma", shells: []string{powershell5, powershell7}, command: `logpretty --utc --fields msg,latency`,
 			want: "12:00:01.000 WARN  slow request  latency=1.2s\n12:00:02.000 INFO  ok  latency=3ms\n",
 		},
-		{name: "bare comma is a list", shells: []string{powershell5, powershell7}, command: `logpretty --utc --fields msg,latency`, wantCode: 2},
 		{
 			name: "a file read through cmd keeps its bytes", shells: []string{powershell5, powershell7}, command: `cmd /c "logpretty < app.log"`,
 			input: "{\"msg\":\"café\"}\n", reads: true, want: "café\n",
@@ -63,12 +63,13 @@ func TestShellQuoting(t *testing.T) {
 		{name: "quote inside single quotes", shells: []string{powershell7}, command: `logpretty --utc --where 'msg="slow request"'`, want: slow},
 		{name: "quoted number is text", shells: []string{powershell7}, command: `logpretty --utc --where 'user_id="042"'`, want: ok},
 
-		{name: "escaped quote inside single quotes", shells: []string{powershell5}, command: `logpretty --utc --where 'msg=\"slow request\"'`, want: slow},
-		{name: "escaped quotes keep a number text", shells: []string{powershell5}, command: `logpretty --utc --where 'user_id=\"042\"'`, want: ok},
 		// Windows PowerShell passes the quotes inside an argument unescaped, so the program takes them for
-		// the quotes of its command line and drops them: this is why the README asks for \" there.
+		// the quotes of its command line and drops them: this is why the README asks for --% there.
 		{name: "bare quotes are dropped", shells: []string{powershell5}, command: `logpretty --utc --where 'user_id="042"'`, want: both},
 		{name: "bare quotes are dropped from a value with a space", shells: []string{powershell5}, command: `logpretty --utc --where 'msg="slow request"'`, wantCode: 2},
+		// After --% the shell passes the rest of the line as it is written, so it is written as for cmd.exe.
+		{name: "stop-parsing token", shells: []string{powershell5}, command: `logpretty --% --utc --where "msg=\"slow request\""`, want: slow},
+		{name: "stop-parsing token keeps a number text", shells: []string{powershell5}, command: `logpretty --% --utc --where "user_id=\"042\""`, want: ok},
 		// Its pipe to a program is ASCII: each of the two bytes of the letter comes out as a question mark.
 		{name: "a pipe loses what is not ASCII", shells: []string{powershell5}, command: `logpretty`, input: "{\"msg\":\"café\"}\n", want: "caf??\n"},
 	}
