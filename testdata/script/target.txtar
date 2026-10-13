@@ -1,0 +1,28 @@
+# The command the README opens with, on a stream of every kind of line. The times have no zone, so they are
+# shown as written whatever the zone of the machine.
+stdin input.log
+exec logpretty --level warn --where 'user_id=42' --fields msg,latency
+cmp stdout want
+! stderr .
+
+-- input.log --
+starting up
+{"time":"2026-10-11 12:00:00","level":"info","msg":"request done","user_id":42,"latency":"12ms"}
+{"time":"2026-10-11 12:00:01","level":"warn","msg":"slow request","user_id":42,"latency":"1.2s","path":"/api/v1/users"}
+{"time":"2026-10-11 12:00:02","level":"warn","msg":"slow request","user_id":7,"latency":"2.5s"}
+  hidden with the entry above
+time="2026-10-11 12:00:03" level=error msg="query failed" user_id=42 latency=3s db=pg-1
+panic: runtime error: index out of range
+	main.go:30 +0x45
+web-1 | {"time":"2026-10-11 12:00:04","level":"error","msg":"upstream gone","user_id":"42"}
+{"time":"2026-10-11 12:00:05","level":"fatal","user_id":42,"code":2}
+  shown: the entry above passes the filters, though it has neither of the fields
+{"time":"2026-10-11 12:00:06","level":"error","msg":"no user"}
+  hidden with the entry above
+-- want --
+12:00:01.000 WARN  slow request  latency=1.2s
+12:00:03.000 ERROR query failed  latency=3s
+panic: runtime error: index out of range
+	main.go:30 +0x45
+web-1 | 12:00:04.000 ERROR upstream gone
+  shown: the entry above passes the filters, though it has neither of the fields
