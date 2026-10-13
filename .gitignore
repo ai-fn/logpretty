@@ -4,6 +4,8 @@ coverage.out
 *.test
 *.prof
 .DS_Store
+.env
+.env.*
 go.work
 go.work.sum
 .idea/
