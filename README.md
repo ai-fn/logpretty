@@ -241,8 +241,10 @@ colors in the `auto` mode; use `--color=always` there.
 ## Development
 
 Requires Go 1.26+, [golangci-lint](https://golangci-lint.run) v2 and `make`. CI runs the tests
-on Linux, macOS and Windows, golangci-lint, `go mod tidy` and [govulncheck](https://go.dev/doc/security/vuln/)
-on every pull request and every push to `main`.
+on Linux, macOS and Windows, golangci-lint, `go mod tidy`, [govulncheck](https://go.dev/doc/security/vuln/)
+and a check of the GoReleaser config on every pull request and every push to `main`. A tag such as
+`v0.1.0` starts the release: the archives are built by GoReleaser and published with their
+checksums.
 
 | Command | Description |
 |---|---|
@@ -253,6 +255,7 @@ on every pull request and every push to `main`.
 | `make vuln` | Check dependencies and the standard library for known vulnerabilities |
 | `make fuzz FUZZ=FuzzName PKG=./path` | Fuzz one target |
 | `make bench` | Run benchmarks |
+| `make snapshot` | Build the release archives into `dist/` without publishing them; needs [GoReleaser](https://goreleaser.com) v2 |
 | `make help` | List all targets |
 
 ## Project structure
@@ -270,9 +273,10 @@ internal/term/        # decides whether to color the output: the --color mode, t
 internal/golden/      # test helper: compares output with golden files
 testdata/script/      # end-to-end scenarios run against the real binary (testscript)
 assets/               # logo, picture of the output
-.github/workflows/    # CI
-Makefile              # build, test, lint, fuzz, bench, vuln
+.github/workflows/    # CI, and the release that a version tag starts
+Makefile              # build, test, lint, fuzz, bench, vuln, snapshot
 .golangci.yml         # golangci-lint v2 config
+.goreleaser.yaml      # GoReleaser config: what a release is built from
 ```
 
 ## Contributing

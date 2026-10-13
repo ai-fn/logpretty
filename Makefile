@@ -5,10 +5,10 @@ PKG      :=
 FUZZ     :=
 FUZZTIME ?= 30s
 
-.PHONY: help build test lint fuzz bench vuln check
+.PHONY: help build test lint fuzz bench vuln check snapshot
 
 help: ## Show available targets
-	@awk -F':.*## ' '/^[a-z]+:.*## /{printf "  %-6s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk -F':.*## ' '/^[a-z]+:.*## /{printf "  %-9s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 build: ## Build bin/logpretty
 	go build -o $(BIN) ./cmd/logpretty
@@ -32,3 +32,6 @@ vuln: ## Check dependencies and stdlib for known vulnerabilities
 	go tool govulncheck ./...
 
 check: test lint ## Run tests and linter (the pre-commit checks)
+
+snapshot: ## Build the release archives into dist/ with GoReleaser, publishing nothing
+	goreleaser release --snapshot --clean

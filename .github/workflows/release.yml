@@ -1,0 +1,86 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  # a manual run builds everything and publishes nothing: a rehearsal before a tag
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  # a release cut off halfway leaves a tag with half of its files
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # GoReleaser builds the changelog from the history up to the previous tag
+          fetch-depth: 0
+          persist-credentials: false
+      # the cask is pushed after the release is out, and a release that is out cannot be run again
+      - name: Check that the token of the tap is there and valid
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          test -n "$HOMEBREW_TAP_TOKEN"
+          curl -fsS -o /dev/null -H "Authorization: Bearer $HOMEBREW_TAP_TOKEN" https://api.github.com/repos/ai-fn/homebrew-tap
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          # go.mod pins the minimum; a release is built with the newest patched stdlib
+          go-version: stable
+          # a cache that another run wrote must not reach the job that holds the tokens
+          cache: false
+      - run: go test ./...
+      # a published tag cannot be moved, so a binary that would not name it stops the release here
+      - name: Check that the binary reports the tag as its version
+        run: |
+          go build -trimpath -o "$RUNNER_TEMP/logpretty" ./cmd/logpretty
+          got=$("$RUNNER_TEMP/logpretty" --version)
+          echo "$got"
+          test "$got" = "logpretty $GITHUB_REF_NAME"
+      - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
+        with:
+          version: "~> v2.18"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          # the tag that started the run, whatever other tags the commit has
+          GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
+
+  snapshot:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+      - run: go test ./...
+      - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
+        with:
+          version: "~> v2.18"
+          args: release --clean --snapshot
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt
+            dist/homebrew
+          retention-days: 3

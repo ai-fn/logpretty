@@ -1,0 +1,87 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+project_name: logpretty
+
+# with a release candidate and the release on one commit, git would sort the candidate first
+git:
+  prerelease_suffix: "-"
+
+builds:
+  - main: ./cmd/logpretty
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    # no -X here: --version reads what the go command stamps into the binary from the tag
+    ldflags:
+      - -s -w
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\(.+\))??!?:.+$'
+      order: 0
+    - title: Bug fixes
+      regexp: '^.*?fix(\(.+\))??!?:.+$'
+      order: 1
+    - title: Performance
+      regexp: '^.*?perf(\(.+\))??!?:.+$'
+      order: 2
+    - title: Documentation
+      regexp: '^.*?docs(\(.+\))??!?:.+$'
+      order: 3
+    # without this group, a commit that matches no other one is left out of the notes
+    - title: Other changes
+      order: 4
+  filters:
+    exclude:
+      - '^test'
+      - '^ci'
+      - '^chore'
+      - '^build'
+      - '^refactor'
+
+release:
+  prerelease: auto
+
+homebrew_casks:
+  - name: logpretty
+    repository:
+      owner: ai-fn
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: https://github.com/ai-fn/logpretty
+    description: Pretty-print JSON, logfmt and plain-text logs from stdin
+    # a release candidate must not replace the cask of the last release
+    skip_upload: auto
+    hooks:
+      post:
+        # the binary is not signed by Apple: macOS would refuse to run what brew has just downloaded
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/logpretty"]
+          end
