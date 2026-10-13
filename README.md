@@ -72,14 +72,16 @@ not structured is printed as it is, apart from control characters:
 ```console
 $ cat app.log
 {"time":"2026-10-11T12:00:00.123Z","level":"info","msg":"server started","port":8080}
-time=2026-10-11T12:00:01Z level=warn msg="slow request" latency=1.2s path=/api/v1/users
-web-1  | {"time":"2026-10-11T12:00:02Z","level":"error","msg":"query failed","db":{"host":"pg-1","retries":3}}
+time=2026-10-11T12:00:01Z level=warn msg="slow request" latency=1.2s path=/api/v1/users user_id=42
+web-1  | {"time":"2026-10-11T12:00:02Z","level":"error","msg":"query failed","user_id":42,"db":{"host":"pg-1","retries":3}}
 panic: runtime error: index out of range
+{"time":"2026-10-11T12:00:03Z","level":"error","msg":"query failed","user_id":7,"db":{"host":"pg-2","retries":1}}
 $ logpretty --utc < app.log
 12:00:00.123 INFO  server started  port=8080
-12:00:01.000 WARN  slow request  latency=1.2s path=/api/v1/users
-web-1  | 12:00:02.000 ERROR query failed  db={"host":"pg-1","retries":3}
+12:00:01.000 WARN  slow request  latency=1.2s path=/api/v1/users user_id=42
+web-1  | 12:00:02.000 ERROR query failed  user_id=42 db={"host":"pg-1","retries":3}
 panic: runtime error: index out of range
+12:00:03.000 ERROR query failed  user_id=7 db={"host":"pg-2","retries":1}
 ```
 
 Control characters are written out, so a log line cannot change the terminal, and a line longer
@@ -100,10 +102,118 @@ colors, for example for `less -R`:
 kubectl logs -f pod | logpretty --color=always | less -R
 ```
 
+### Filtering
+
+`--level` shows the entries of a level and above, and `--where` the ones that meet an expression.
+An entry has to pass every filter that is given:
+
+```console
+$ logpretty --utc --level warn --where 'user_id=42' < app.log
+12:00:01.000 WARN  slow request  latency=1.2s path=/api/v1/users user_id=42
+web-1  | 12:00:02.000 ERROR query failed  user_id=42 db={"host":"pg-1","retries":3}
+panic: runtime error: index out of range
+$ logpretty --utc --where 'msg~^query' --where 'db.host!=pg-1' < app.log
+12:00:03.000 ERROR query failed  user_id=7 db={"host":"pg-2","retries":1}
+```
+
+An expression is a key alone, or a key, an operator and a value; the key names a field of the
+entry. The spaces around the operator may be left out:
+
+| Expression | Shows the entries where |
+|---|---|
+| `key` | the field is there, whatever its value |
+| `key=value` | the field equals the value |
+| `key!=value` | it does not, or the field is missing |
+| `key>value`, `key>=value`, `key<value`, `key<=value` | the field is a number above or below the value; `>=` and `<=` take an equal one too |
+| `key~regexp` | the regular expression ([RE2 syntax](https://github.com/google/re2/wiki/Syntax)) matches a part of the field |
+| `key!~regexp` | it does not, or the field is missing |
+
+- **Numbers and text.** `=` and `!=` compare two numbers as numbers, so `user_id=42` finds `42`,
+  `"42"`, `42.0` and the logfmt `user_id=42`. A string that reads as a number is one: `id=42` also
+  finds `"042"` and `version=1.10` finds `"1.1"`, and quotes around the value do not make it text.
+  To compare such a value as text, use a regular expression: `version~^1\.10$`. Anything else is
+  compared as text, byte for byte, case and all. `>`, `>=`, `<` and `<=` compare numbers only:
+  `latency>100ms` is an error instead of being compared as text.
+- **Keys.** `db.host` is the field of that very name if the entry has one, and otherwise `host`
+  inside the object `db`; arrays are not looked into. `msg`, `level` and `time` stand for the
+  message, the level and the time of the entry, whatever key the log keeps them under:
+  `level>=warn` compares by severity and `time>=2026-10-11T12:00:02Z` by the moment. A time without
+  a zone is local, or UTC with `--utc`; the timestamp a collector puts in front of a line is not
+  the time of the entry. A key in double quotes, as in `"level"=3`, is the top-level field of that
+  very name: it stands for nothing else and does not look into objects.
+- **Quotes.** A value with a space goes in double quotes, inside the quotes of the shell:
+  `--where 'msg="slow request"'`. Inside the double quotes `\"` is a quote and `\\` a backslash;
+  any other backslash stays, so `msg~"\d+ ms"` works. An empty value is written `""`. Without
+  quotes a value cannot start with an operator, a bracket or `'`, so a regular expression that
+  does goes in quotes: `msg~"(?i)timeout"`.
+- **Missing fields.** An entry without the field meets `!=` and `!~` and nothing else, so
+  `--where 'status!=200'` also shows the entries that have no status; add `--where status` to
+  leave them out.
+- **Several conditions.** Give the flag again: every condition has to hold. There is no `or`.
+
+A mistake in an expression is shown with a caret under it, and no input is read. The caret is
+placed by characters, so wide ones, such as CJK and emoji, shift it:
+
+```console
+$ logpretty --where 'user_id=>42' < app.log
+logpretty: --where 'user_id=>42'
+                            ^ unexpected '>'
+Run 'logpretty --help' for usage.
+```
+
+A line that is not an entry, such as the panic above, goes the way of the entry before it: it is
+shown after a shown entry and hidden after a hidden one, so a stack trace stays with its error.
+`--plain show` shows such lines whatever the filters say, and `--plain hide` hides them all, even
+when nothing is filtered:
+
+```console
+$ logpretty --utc --level error --plain hide < app.log
+web-1  | 12:00:02.000 ERROR query failed  user_id=42 db={"host":"pg-1","retries":3}
+12:00:03.000 ERROR query failed  user_id=7 db={"host":"pg-2","retries":1}
+```
+
+### Choosing fields
+
+`--fields` names the fields to show, in the order to show them in; a nested one is written with
+dots. The time and the level are shown anyway, and the message, in its usual place, if `msg` is in
+the list. `time` and `level` may be named too: `--fields level` shows the time and the level of
+every entry that has a level. `--no-time` leaves the time out:
+
+```console
+$ logpretty --utc --fields msg,db.host < app.log
+12:00:00.123 INFO  server started
+12:00:01.000 WARN  slow request
+web-1  | 12:00:02.000 ERROR query failed  db.host=pg-1
+panic: runtime error: index out of range
+12:00:03.000 ERROR query failed  db.host=pg-2
+$ logpretty --no-time --fields latency,path < app.log
+WARN  latency=1.2s path=/api/v1/users
+panic: runtime error: index out of range
+```
+
+An entry that has none of the fields is not printed, as in the second command. The lines that are
+not entries are left to the filters and to `--plain`, so the stack trace of such an entry stays.
+
+All of it together:
+
+```console
+$ logpretty --utc --level warn --where 'user_id=42' --fields msg,latency < app.log
+12:00:01.000 WARN  slow request  latency=1.2s
+web-1  | 12:00:02.000 ERROR query failed
+panic: runtime error: index out of range
+```
+
+On Windows, `cmd.exe` does not take single quotes for quotes: write `--where "user_id=42"`, and
+`\"` for a quote inside, as in `--where "msg=\"slow request\""`; keep `&`, `|`, `<`, `>` and `^`
+inside the double quotes. PowerShell reads an unquoted comma as a list and passes its items as
+separate arguments, so put the fields in quotes there: `--fields 'msg,latency'`.
+
+### Flags
+
 | Flag | Description |
 |---|---|
 | `--level LEVEL` | Show the entries of this level or above: `trace`, `debug`, `info`, `warn`, `error` or `fatal`. An entry without a level is hidden, and by default so are the plain lines after a hidden entry (see `--plain`) |
-| `--where EXPR` | Show the entries that meet the expression: `key`, or `key OP value` with `=`, `!=`, `>`, `>=`, `<`, `<=`, `~` (a regular expression) or `!~`. Given twice, it asks for both. By default the plain lines after a hidden entry are hidden too (see `--plain`). `logpretty --help` describes the expressions |
+| `--where EXPR` | Show the entries that meet the expression: `key`, or `key OP value` with `=`, `!=`, `>`, `>=`, `<`, `<=`, `~` (a regular expression) or `!~`. Given twice, it asks for both. By default the plain lines after a hidden entry are hidden too (see `--plain`). The expressions are described under [Filtering](#filtering) |
 | `--plain MODE` | What to do with the lines that are not entries, such as a stack trace: `follow` (the default) shows every line when nothing is filtered, and under `--level` or `--where` a line only after an entry that is shown; `show` shows them all, and `hide` hides them all, filter or not |
 | `--fields LIST` | Show only these fields, in this order: names separated by commas, as in `latency,http.status`. The time and the level are shown anyway; so is the message, in its usual place, if `msg` is in the list. An entry with none of the fields is not printed, while the plain lines after it still are |
 | `--no-time` | Leave the time out |
