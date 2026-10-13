@@ -27,11 +27,6 @@ whenever the next read would block, so `kubectl logs -f` shows lines as they arr
 kubectl logs -f pod | logpretty --level warn --where 'user_id=42' --fields msg,latency
 ```
 
-> [!NOTE]
-> **Status: early development.** Format detection, readable, colored, terminal-safe output and
-> the `--level`, `--where` and `--plain` options work. `--fields` is not implemented yet, so
-> the command above is the target usage, not something you can run today.
-
 <p align="center">
   <img src="assets/demo.svg" width="681" alt="logpretty output in a terminal: the time and the keys are faint, each level has its own style, a plain line is left as it is" />
 </p>
@@ -53,7 +48,7 @@ kubectl logs -f pod | logpretty --level warn --where 'user_id=42' --fields msg,l
 | `--level LEVEL`: show only the entries of that level and above; by default plain lines, such as a stack trace, go the way of the entry before them | Available |
 | `--where EXPR`: show only the entries that meet an expression, such as `user_id=42`, `http.status>=500` or `msg~timeout`; given twice, it asks for both | Available |
 | `--plain follow\|show\|hide`: what to do with the lines that are not entries: send them the way of the entry before them when a filter is on (the default), show them all, or hide them all, filter or not | Available |
-| `--fields a,b`: choose the fields to show | Not yet |
+| `--fields msg,latency`: show only the fields named, in the order of the list, nested ones as `http.status`; the message too, in its usual place, if `msg` is named; `--no-time` leaves the time out | Available |
 
 ## Installation
 
@@ -110,6 +105,8 @@ kubectl logs -f pod | logpretty --color=always | less -R
 | `--level LEVEL` | Show the entries of this level or above: `trace`, `debug`, `info`, `warn`, `error` or `fatal`. An entry without a level is hidden, and by default so are the plain lines after a hidden entry (see `--plain`) |
 | `--where EXPR` | Show the entries that meet the expression: `key`, or `key OP value` with `=`, `!=`, `>`, `>=`, `<`, `<=`, `~` (a regular expression) or `!~`. Given twice, it asks for both. By default the plain lines after a hidden entry are hidden too (see `--plain`). `logpretty --help` describes the expressions |
 | `--plain MODE` | What to do with the lines that are not entries, such as a stack trace: `follow` (the default) shows every line when nothing is filtered, and under `--level` or `--where` a line only after an entry that is shown; `show` shows them all, and `hide` hides them all, filter or not |
+| `--fields LIST` | Show only these fields, in this order: names separated by commas, as in `latency,http.status`. The time and the level are shown anyway; so is the message, in its usual place, if `msg` is in the list. An entry with none of the fields is not printed, while the plain lines after it still are |
+| `--no-time` | Leave the time out |
 | `--color WHEN` | When to color the output: `auto` (on a terminal, the default), `always` or `never`. `always` also beats `NO_COLOR` |
 | `--utc` | Show times in UTC instead of the local time zone |
 | `--max-line SIZE` | Longest line to keep: a number of bytes, or one with `K`, `M` or `G` for KiB, MiB or GiB (default `1M`) |
@@ -148,7 +145,7 @@ internal/linereader/  # reads lines of any length and truncates at a limit
 internal/entry/       # parsed form of a log line: fields, level
 internal/parse/       # tells JSON, logfmt and plain lines apart, finds time, level and message
 internal/filter/      # decides which lines are shown: --level, the expressions of --where, the plain lines of --plain
-internal/render/      # formats an entry as a line of text and keeps control characters out of the terminal
+internal/render/      # formats an entry as a line of text (--fields, --no-time) and keeps control characters out of the terminal
 internal/term/        # decides whether to color the output: the --color mode, the terminal, NO_COLOR
 internal/golden/      # test helper: compares output with golden files
 testdata/script/      # end-to-end scenarios run against the real binary (testscript)

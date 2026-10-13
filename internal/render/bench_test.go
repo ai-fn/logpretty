@@ -53,6 +53,23 @@ func BenchmarkRender(b *testing.B) {
 			})
 		}
 	}
+
+	// A choice of fields: the first and the last key of the entry, a nested one and one it lacks.
+	fields := Select([]string{"msg", "status", "field15", "http.path", "nope"})
+	for _, tt := range lines {
+		b.Run(tt.name+"/fields", func(b *testing.B) {
+			p := parse.Parser{Loc: time.UTC}
+			e := p.Parse([]byte(tt.line))
+			r := Renderer{Loc: time.UTC, Fields: fields}
+			dst := r.AppendEntry(nil, e)
+			b.SetBytes(int64(len(tt.line)))
+			b.ReportAllocs()
+
+			for b.Loop() {
+				dst = r.AppendEntry(dst[:0], e)
+			}
+		})
+	}
 }
 
 func BenchmarkAppendSafe(b *testing.B) {

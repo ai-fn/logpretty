@@ -16,6 +16,13 @@ Flags:
                         Under --level or --where, follow shows a line only
                         after an entry that is shown; hide hides every such
                         line even when nothing is filtered
+      --fields LIST     show only these fields, in this order: keys separated
+                        by commas, with dots for nested ones, as in
+                        latency,http.status. The time and the level are shown
+                        anyway; so is the message, in its usual place, if msg
+                        is in the list. An entry with none of the fields is
+                        not printed
+      --no-time         leave the time out
       --color WHEN      color the output: auto (only on a terminal, the
                         default), always or never
       --utc             show times in UTC instead of the local time zone
@@ -49,5 +56,6 @@ Examples:
   kubectl logs -f pod | logpretty --level warn
   kubectl logs -f pod | logpretty --where 'status>=500' --where 'path~^/api/'
   kubectl logs -f pod | logpretty --level error --plain hide
+  kubectl logs -f pod | logpretty --fields msg,latency --no-time
   docker compose logs -f | logpretty --utc
   logpretty --color=always < app.log | less -R

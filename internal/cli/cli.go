@@ -25,6 +25,8 @@ type Config struct {
 	Level   entry.Level   // the lowest level to show; LevelUnknown shows every entry
 	Where   []filter.Cond // conditions an entry must meet to be shown, all of them
 	Plain   filter.PlainMode
+	Fields  []string // the fields to show, as they were asked for; nil shows them all
+	NoTime  bool
 }
 
 // ErrHelp is what Parse returns when the arguments ask for the help; it is a request, not a failure.
@@ -49,6 +51,13 @@ Flags:
                         Under --level or --where, follow shows a line only
                         after an entry that is shown; hide hides every such
                         line even when nothing is filtered
+      --fields LIST     show only these fields, in this order: keys separated
+                        by commas, with dots for nested ones, as in
+                        latency,http.status. The time and the level are shown
+                        anyway; so is the message, in its usual place, if msg
+                        is in the list. An entry with none of the fields is
+                        not printed
+      --no-time         leave the time out
       --color WHEN      color the output: auto (only on a terminal, the
                         default), always or never
       --utc             show times in UTC instead of the local time zone
@@ -82,6 +91,7 @@ Examples:
   kubectl logs -f pod | logpretty --level warn
   kubectl logs -f pod | logpretty --where 'status>=500' --where 'path~^/api/'
   kubectl logs -f pod | logpretty --level error --plain hide
+  kubectl logs -f pod | logpretty --fields msg,latency --no-time
   docker compose logs -f | logpretty --utc
   logpretty --color=always < app.log | less -R
 `
@@ -157,12 +167,29 @@ func newFlagSet(f *flags) *flag.FlagSet {
 		f.Plain, err = filter.ParsePlainMode(s)
 		return err
 	})
+	fs.Func("fields", "", func(s string) error {
+		names, err := parseFields(s)
+		f.Fields = append(f.Fields, names...)
+		return err
+	})
+	fs.BoolVar(&f.NoTime, "no-time", f.NoTime, "")
 	fs.Func("where", "", func(s string) error {
 		f.exprs = append(f.exprs, s)
 		return nil
 	})
 	fs.BoolVar(&f.version, "version", false, "")
 	return fs
+}
+
+// parseFields reads the list of --fields: names separated by commas, with the spaces around each dropped.
+func parseFields(s string) ([]string, error) {
+	names := strings.Split(s, ",")
+	for i, name := range names {
+		if names[i] = strings.TrimSpace(name); names[i] == "" {
+			return nil, errors.New("a field has no name; the names are separated by commas, as in msg,latency")
+		}
+	}
+	return names, nil
 }
 
 // WriteError reports arguments that Parse turned down. The flag package echoes an argument as it was typed,

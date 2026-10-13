@@ -1,0 +1,54 @@
+# --fields chooses what is shown of an entry and in which order; the time and the level stay, and an entry
+# with none of the fields is not printed. The lines that are not entries are not touched.
+stdin input.log
+exec logpretty --utc --fields latency,msg,http.status
+cmp stdout want
+! stderr .
+
+# --no-time leaves the time out, with a list of fields and without one.
+stdin input.log
+exec logpretty --no-time --fields msg
+cmp stdout want_no_time
+! stderr .
+stdin input.log
+exec logpretty --no-time
+cmp stdout want_all
+! stderr .
+
+! exec logpretty --fields a,,b
+stderr '^logpretty: invalid value "a,,b" for flag -fields: a field has no name; the names are separated by commas, as in msg,latency$'
+! stdout .
+
+-- input.log --
+banner
+{"time":"2026-10-11T12:00:00Z","level":"info","msg":"started","port":8080}
+{"time":"2026-10-11T12:00:01Z","level":"error","msg":"request failed","http":{"status":502},"latency":"1.2s"}
+panic: boom
+	main.go:30 +0x45
+level=warn latency=3s path=/api
+web-1 | {"level":"debug","port":1}
+{}
+-- want --
+banner
+12:00:00.000 INFO  started
+12:00:01.000 ERROR request failed  latency=1.2s http.status=502
+panic: boom
+	main.go:30 +0x45
+WARN  latency=3s
+{}
+-- want_no_time --
+banner
+INFO  started
+ERROR request failed
+panic: boom
+	main.go:30 +0x45
+{}
+-- want_all --
+banner
+INFO  started  port=8080
+ERROR request failed  http={"status":502} latency=1.2s
+panic: boom
+	main.go:30 +0x45
+WARN  latency=3s path=/api
+web-1 | DEBUG port=1
+{}

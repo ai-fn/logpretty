@@ -21,6 +21,7 @@ import (
 	"github.com/ai-fn/logpretty/internal/cli"
 	"github.com/ai-fn/logpretty/internal/entry"
 	"github.com/ai-fn/logpretty/internal/filter"
+	"github.com/ai-fn/logpretty/internal/render"
 )
 
 type failWriter struct{}
@@ -186,6 +187,51 @@ func TestRun(t *testing.T) {
 			wantOut: x(20) + "…[+10B]\n" + x(20) + "…[+10B]\n",
 		},
 
+		{
+			name:    "fields choose what is shown and in which order",
+			args:    []string{"--utc", "--fields", "latency,msg"},
+			in:      `{"time":"2026-10-11T12:00:00Z","level":"warn","msg":"slow","user_id":42,"latency":"1.2s"}` + "\n",
+			wantOut: "12:00:00.000 WARN  slow  latency=1.2s\n",
+		},
+		{
+			name:    "an entry with none of the fields is not printed, the lines that are not entries are",
+			args:    []string{"--fields", "latency"},
+			in:      "banner\n" + `{"level":"info","msg":"ok"}` + "\n  after ok\n" + `{"level":"warn","latency":"1.2s"}` + "\n{}\n" + x(1030) + "\n",
+			wantOut: "banner\n  after ok\nWARN  latency=1.2s\n{}\n" + x(1030) + "\n",
+		},
+		{
+			name:    "fields do not change what a filter decides for the plain lines",
+			args:    []string{"--level", "error", "--fields", "latency"},
+			in:      `{"level":"error","msg":"boom"}` + "\npanic: boom\n" + `{"level":"info","latency":"1s"}` + "\n  after info\n",
+			wantOut: "panic: boom\n",
+		},
+		{name: "fields given twice add up", args: []string{"--fields", "b", "--fields", "a,b"}, in: `{"a":1,"b":2,"c":3}` + "\n", wantOut: "b=2 a=1\n"},
+		{
+			name:    "the filters and the fields together",
+			args:    []string{"--level", "warn", "--where", "user_id=42", "--fields", "msg,latency"},
+			in:      `{"time":"2026-10-11 12:00:00","level":"warn","msg":"slow","user_id":42,"latency":"1.2s"}` + "\n" + `{"level":"info","msg":"ok","user_id":42}` + "\n  at main.go:30\n",
+			wantOut: "12:00:00.000 WARN  slow  latency=1.2s\n",
+		},
+		{
+			name:    "no-time leaves the time out",
+			args:    []string{"--no-time"},
+			in:      `{"time":"2026-10-11T12:00:00Z","level":"info","msg":"hi","n":1}` + "\n" + `{"time":"2026-10-11T12:00:01Z"}` + "\nplain\n",
+			wantOut: "INFO  hi  n=1\nplain\n",
+		},
+		{
+			name:    "no-time with fields",
+			args:    []string{"--no-time", "--fields", "n,time,msg"},
+			in:      `{"time":"2026-10-11T12:00:00Z","level":"info","msg":"hi","n":1}` + "\n",
+			wantOut: "INFO  hi  n=1\n",
+		},
+		{
+			name:    "color with fields",
+			args:    []string{"--color=always", "--utc", "--fields", "ms"},
+			in:      `{"time":"2026-10-11T12:00:00Z","level":"warn","msg":"slow","ms":120}` + "\n",
+			wantOut: "\x1b[2m12:00:00.000\x1b[0m \x1b[33mWARN\x1b[0m  \x1b[2mms=\x1b[0m120\n",
+		},
+		{name: "a cut line is shown whatever the fields are", args: []string{"--fields", "a", "--max-line", "8"}, in: `{"a":1,"b":"long"}` + "\n", wantOut: `{"a":1,"…[+10B]` + "\n"},
+
 		{name: "huge max-line allocates nothing up front", args: []string{"--max-line=" + strconv.Itoa(math.MaxInt)}, in: "abc\n", wantOut: "abc\n"},
 		{name: "double dash ends the flags", args: []string{"--"}, in: "abc\n", wantOut: "abc\n"},
 
@@ -238,6 +284,7 @@ func TestRunArgumentErrors(t *testing.T) {
 		{name: "level of an unknown name", args: []string{"--level", "loud"}, want: `invalid value "loud" for flag -level: invalid level "loud": want trace, debug, info, warn, error or fatal`},
 		{name: "control characters in an argument", args: []string{"--\x1b[31m"}, want: `flag provided but not defined: -\x1b[31m`},
 		{name: "plain of an unknown kind", args: []string{"--plain", "all"}, want: `invalid value "all" for flag -plain: invalid plain mode "all": want follow, show or hide`},
+		{name: "fields with a name left out", args: []string{"--fields", "a,,b"}, want: `invalid value "a,,b" for flag -fields: a field has no name; the names are separated by commas, as in msg,latency`},
 		{name: "where expression", args: []string{"--where", "user_id=>42"}, want: "--where 'user_id=>42'\n" + strings.Repeat(" ", 28) + "^ unexpected '>'"},
 		{
 			name: "control characters in a where expression",
@@ -362,6 +409,7 @@ func TestWriteDoesNotAllocate(t *testing.T) {
 				t.Fatal(err)
 			}
 			p.filter.MinLevel, p.filter.Where = entry.LevelInfo, []filter.Cond{cond}
+			p.renderer.NoTime, p.renderer.Fields = true, render.Select([]string{"msg", "status", "nope"})
 		}
 
 		for _, line := range lines {

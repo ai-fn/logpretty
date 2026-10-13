@@ -297,5 +297,52 @@ func FuzzRender(f *testing.F) {
 		if text := stripStyles(t, "the colored truncated line", line, styled); text != cut {
 			t.Fatalf("truncated line %q in color, styles removed\n got %q\nwant %q", line, text, cut)
 		}
+
+		// A choice of fields and a hidden time: names that are roles, names the seeds have, and two of the entry's own.
+		names := []string{"msg", "nope", "a", "http.a", "level", "status", "time"}
+		for i := 0; i < len(e.Fields) && i < 2; i++ {
+			names = append(names, string(e.Fields[i].Key))
+		}
+		for _, noTime := range []bool{false, true} {
+			for _, fields := range [][]string{nil, names} {
+				chosen := Renderer{Loc: testLoc, NoTime: noTime, Fields: Select(fields)}
+				chosen.AppendEntry(nil, p.Parse([]byte(`{"http":{"a":"other"},"status":"other","msg":"other"}`)))
+				part := string(chosen.AppendEntry([]byte(">"), p.Parse(line)))[1:]
+				what := fmt.Sprintf("the entry with fields %q and no time %v", fields, noTime)
+
+				switch {
+				case !structured:
+					// A line that is printed as it is stays so, whatever was chosen.
+					if part != got[1:] {
+						t.Fatalf("%s of %q\n got %q\nwant %q", what, line, part, got[1:])
+					}
+				case part != "":
+					// Nothing at all is how an entry with nothing left is shown; anything else is one safe line.
+					checkLine(t, what, line, part)
+					if tabs := strings.Count(part, "\t"); tabs != prefixTabs {
+						t.Fatalf("%s of %q is %q with %d tabs, want the %d of its prefix", what, line, part, tabs, prefixTabs)
+					}
+				}
+				if fields == nil && !noTime && part != got[1:] {
+					t.Fatalf("%s of %q\n got %q\nwant %q", what, line, part, got[1:])
+				}
+				// Without a time to hide, hiding it changes nothing.
+				if e.Time.IsZero() && noTime {
+					shown := Renderer{Loc: testLoc, Fields: Select(fields)}
+					if want := string(shown.AppendEntry(nil, p.Parse(line))); part != want {
+						t.Fatalf("%s of %q, which has no time\n got %q\nwant %q", what, line, part, want)
+					}
+				}
+
+				inColor := Renderer{Theme: DefaultTheme(), Loc: testLoc, NoTime: noTime, Fields: Select(fields)}
+				styled := string(inColor.AppendEntry(nil, p.Parse(line)))
+				if styled == "" && part == "" {
+					continue
+				}
+				if text := stripStyles(t, what+" in color", line, styled); text != part {
+					t.Fatalf("%s of %q in color, styles removed\n got %q\nwant %q", what, line, text, part)
+				}
+			}
+		}
 	})
 }

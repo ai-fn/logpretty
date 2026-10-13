@@ -43,6 +43,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		w:      bufio.NewWriterSize(stdout, writeBufferSize),
 		filter: filter.Filter{MinLevel: cfg.Level, Where: cfg.Where, Plain: cfg.Plain},
 	}
+	p.renderer.NoTime, p.renderer.Fields = cfg.NoTime, render.Select(cfg.Fields)
 	if cfg.UTC {
 		// The same zone for both, so that a time written without one is shown as it was written.
 		p.parser.Loc, p.renderer.Loc = time.UTC, time.UTC
