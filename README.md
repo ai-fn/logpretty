@@ -11,6 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/ai-fn/logpretty/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/ai-fn/logpretty/actions/workflows/ci.yml/badge.svg" /></a>
+  <a href="https://github.com/ai-fn/logpretty/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/ai-fn/logpretty?color=00ADD8" /></a>
   <img alt="Go version" src="https://img.shields.io/github/go-mod/go-version/ai-fn/logpretty?logo=go&logoColor=white&color=00ADD8" />
   <img alt="golangci-lint" src="https://img.shields.io/badge/golangci--lint-v2-00ADD8?logo=go&logoColor=white" />
   <img alt="License" src="https://img.shields.io/github/license/ai-fn/logpretty" />
@@ -52,6 +53,32 @@ kubectl logs -f pod | logpretty --level warn --where 'user_id=42' --fields msg,l
 
 ## Installation
 
+With [Homebrew](https://brew.sh) on macOS:
+
+```bash
+brew install --cask ai-fn/tap/logpretty
+```
+
+Or take the archive for your system from the
+[latest release](https://github.com/ai-fn/logpretty/releases/latest), unpack it and put `logpretty`
+on your `PATH`. The archives are named `logpretty_<version>_<os>_<arch>`, where `darwin` is macOS
+and `amd64` is x86-64; there is one for Linux, macOS and Windows, each for x86-64 and ARM64. The
+`checksums.txt` of the release holds the SHA-256 of every archive; with both files in one
+directory:
+
+```bash
+shasum -a 256 --ignore-missing -c checksums.txt    # or: sha256sum --ignore-missing -c checksums.txt
+```
+
+It must print the name of the archive and `OK`: anything else, or nothing at all, means that the
+archive is not the one that was released.
+
+The macOS binaries are not notarized by Apple. The cask clears the quarantine mark itself. If macOS
+refuses to open a binary from an archive that a browser downloaded, clear the mark on the unpacked
+file: `xattr -d com.apple.quarantine logpretty`. `curl` does not set the mark.
+
+With Go 1.26 or later, on any system:
+
 ```bash
 go install github.com/ai-fn/logpretty/cmd/logpretty@latest
 ```
@@ -63,6 +90,8 @@ git clone https://github.com/ai-fn/logpretty.git
 cd logpretty
 make build          # produces bin/logpretty
 ```
+
+`logpretty --version` prints the version that is installed.
 
 ## Usage
 
@@ -217,6 +246,24 @@ separate arguments, so put the fields in quotes there: `--fields 'msg,latency'`.
 `--where 'msg=\"slow request\"'`; PowerShell 7.3 and later passes them as they are. A pipe of
 Windows PowerShell 5.1 also turns the characters outside ASCII into `?`, which
 `cmd /c "logpretty < app.log"` does not.
+
+### Recipes
+
+```bash
+# follow one pod of a deployment: warnings and above, each with the stack trace that follows it
+kubectl logs -f deploy/api | logpretty --level warn
+
+# kubectl --timestamps and docker compose put a prefix before each line; logpretty reads past it
+kubectl logs -f deploy/api --timestamps | logpretty --where 'http.status>=500'
+docker compose logs -f | logpretty --where 'msg~timeout' --fields msg,latency
+
+# a file that is still being written: errors and above, without the lines that are not entries
+tail -f app.log | logpretty --level error --plain hide
+
+# what one user did in one hour of an old log, paged with colors
+logpretty --color=always --where 'user_id=42' --where 'time>=2026-10-11T12:00:00Z' \
+  --where 'time<2026-10-11T13:00:00Z' < app.log | less -R
+```
 
 ### Flags
 
