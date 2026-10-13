@@ -206,9 +206,17 @@ panic: runtime error: index out of range
 ```
 
 On Windows, `cmd.exe` does not take single quotes for quotes: write `--where "user_id=42"`, and
-`\"` for a quote inside, as in `--where "msg=\"slow request\""`; keep `&`, `|`, `<`, `>` and `^`
-inside the double quotes. PowerShell reads an unquoted comma as a list and passes its items as
-separate arguments, so put the fields in quotes there: `--fields 'msg,latency'`.
+`\"` for a quote inside, as in `--where "msg=\"slow request\""`. Keep `&`, `|`, `<`, `>` and `^`
+inside the double quotes. Between a pair of `\"` the shell takes them for its own, so put a `^`
+before each one there: `--where "msg~\"^^slow request^|failed\""`.
+
+PowerShell takes the single quotes, but it cannot read a file with `<`, so pipe the file in:
+`Get-Content app.log | logpretty`. It reads an unquoted comma as a list and passes its items as
+separate arguments, so put the fields in quotes there: `--fields 'msg,latency'`. Windows PowerShell
+5.1 drops the double quotes inside an argument, so write `\"` for each of them there, as in
+`--where 'msg=\"slow request\"'`; PowerShell 7.3 and later passes them as they are. A pipe of
+Windows PowerShell 5.1 also turns the characters outside ASCII into `?`, which
+`cmd /c "logpretty < app.log"` does not.
 
 ### Flags
 
