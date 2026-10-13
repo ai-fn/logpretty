@@ -23,11 +23,12 @@ const (
 
 // expr is a condition as it is written, before its value is given a type.
 type expr struct {
-	key      string
-	literal  bool // the key was in quotes
-	op       op
-	value    string
-	valuePos int // where the value starts in the expression, in bytes
+	key         string
+	literal     bool // the key was in quotes
+	op          op
+	value       string
+	quotedValue bool // the value was in quotes
+	valuePos    int  // where the value starts in the expression, in bytes
 }
 
 // SyntaxError is an expression that cannot be read.
@@ -75,11 +76,11 @@ func parseExpr(s string) (expr, error) {
 
 	i = skipSpace(s, i+width)
 	e.valuePos = i
-	bare := false
 	switch {
 	case i == len(s):
 		return expr{}, &SyntaxError{Pos: i, Msg: `missing value; an empty one is written ""`}
 	case s[i] == '"':
+		e.quotedValue = true
 		e.value, i, err = quoted(s, i)
 		if err != nil {
 			return expr{}, err
@@ -93,12 +94,11 @@ func parseExpr(s string) (expr, error) {
 			i++
 		}
 		e.value = s[start:i]
-		bare = true
 	}
 
 	if i = skipSpace(s, i); i < len(s) {
 		err := unexpected(s, i)
-		if bare && s[i] != '"' && !isReserved(s[i]) {
+		if !e.quotedValue && s[i] != '"' && !isReserved(s[i]) {
 			err.Msg += ": an expression is one condition, and a value with spaces needs double quotes"
 		}
 		return expr{}, err

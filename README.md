@@ -130,10 +130,12 @@ entry. The spaces around the operator may be left out:
 
 - **Numbers and text.** `=` and `!=` compare two numbers as numbers, so `user_id=42` finds `42`,
   `"42"`, `42.0` and the logfmt `user_id=42`. A string that reads as a number is one: `id=42` also
-  finds `"042"` and `version=1.10` finds `"1.1"`, and quotes around the value do not make it text.
-  To compare such a value as text, use a regular expression: `version~^1\.10$`. Anything else is
-  compared as text, byte for byte, case and all. `>`, `>=`, `<` and `<=` compare numbers only:
-  `latency>100ms` is an error instead of being compared as text.
+  finds `"042"` and `version=1.10` finds `"1.1"`. A value in double quotes is text, and finds only
+  what is written the very same way: `--where 'version="1.10"'` leaves `"1.1"` out. Anything that
+  is not a number is compared as text too, byte for byte, case and all. `>`, `>=`, `<` and `<=`
+  compare numbers only, in quotes or not: `latency>100ms` is an error instead of being compared as
+  text. The keys `level` and `time` are the exception to all of this: they are compared as a level
+  and as a moment, in quotes or not.
 - **Keys.** `db.host` is the field of that very name if the entry has one, and otherwise `host`
   inside the object `db`; arrays are not looked into. `msg`, `level` and `time` stand for the
   message, the level and the time of the entry, whatever key the log keeps them under:

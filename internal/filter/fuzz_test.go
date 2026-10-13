@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/ai-fn/logpretty/internal/entry"
 	"github.com/ai-fn/logpretty/internal/parse"
@@ -45,7 +46,7 @@ func referenceExpr(s string) (e expr, ok bool) {
 	operator, _ := group(3)
 	e.op = refOps[operator]
 	if value, quoted := group(4); quoted {
-		e.value = exprEscape.ReplaceAllString(value, "$1")
+		e.value, e.quotedValue = exprEscape.ReplaceAllString(value, "$1"), true
 	} else {
 		e.value, _ = group(5)
 	}
@@ -77,7 +78,7 @@ func FuzzParseExpr(f *testing.F) {
 			}
 			return
 		}
-		if got.key != want.key || got.literal != want.literal || got.op != want.op || got.value != want.value {
+		if got.key != want.key || got.literal != want.literal || got.op != want.op || got.value != want.value || got.quotedValue != want.quotedValue {
 			t.Fatalf("parseExpr(%q)\n got %+v\nwant %+v", s, got, want)
 		}
 		if got.op == opExists {
@@ -163,8 +164,9 @@ func FuzzKeep(f *testing.F) {
 	lines := []string{
 		`{"time":"2026-10-11T12:00:00Z","level":"warn","msg":"slow request","user_id":42,"http":{"status":502},"note":"a \"b\"\n"}`,
 		`time=2026-10-11T12:00:00Z level=info msg="request done" status=200 word`,
-		`{"level":"bogus","time":"yesterday","msg":42,"big":9007199254740993,"ok":true,"err":null}`,
+		`{"level":"bogus","time":"yesterday","msg":42,"big":9007199254740993,"ok":true,"err":null,"code":"042"}`,
 		`web-1 | {"severity":"ERROR","message":"failed"}`, `{}`, `plain text`, ``,
+		"msg=x a=\xff",
 	}
 	for _, seed := range [][2]string{
 		{"user_id", "42"},
@@ -172,18 +174,23 @@ func FuzzKeep(f *testing.F) {
 		{"http.status", "502"},
 		{"msg", "slow request"},
 		{"msg", "^slow"},
+		{"msg", "42"},
 		{"level", "warn"},
 		{"level", "bogus"},
 		{"time", "2026-10-11T12:00:00Z"},
 		{"time", "yesterday"},
 		{"note", "a \"b\"\n"},
 		{"big", "9007199254740992"},
+		{"code", "42"},
+		{"code", "042"},
 		{"ok", "true"},
 		{"err", "null"},
 		{"nope", ""},
 		{"", ""},
 		{"status", "2e2"},
 		{"msg", "("},
+		{"a", "\ufffd"},
+		{"a", "\xff"},
 	} {
 		for _, line := range lines {
 			f.Add([]byte(line), seed[0], seed[1])
@@ -194,60 +201,110 @@ func FuzzKeep(f *testing.F) {
 		// Clipped, so that a read past the end panics instead of finding spare capacity.
 		line = slices.Clip(slices.Clone(line))
 		p := parse.Parser{Loc: time.UTC}
+		if p.Parse(line).Format == entry.FormatPlain {
+			return // a plain line is not asked about its fields
+		}
+
+		// keep compiles the expression and asks about the line; ok is false if it does not compile.
+		keep := func(expression string) (kept, ok bool) {
+			c, err := Compile(expression, time.UTC)
+			if err != nil {
+				var syntax *SyntaxError
+				if !errors.As(err, &syntax) || syntax.Pos < 0 || syntax.Pos > len(expression) {
+					t.Fatalf("Compile(%q) error = %#v, want a SyntaxError inside the expression", expression, err)
+				}
+				return false, false
+			}
+			fresh := Filter{Where: []Cond{c}}
+			kept = fresh.Keep(p.Parse(line))
+
+			// A Filter that has seen other entries must decide the same.
+			used := Filter{Where: []Cond{c}}
+			for _, other := range []string{`{"a":"x \" y","b":{"c":{"d":1}}}`, `a=1 b="x \" y"`, `text`} {
+				used.Keep(p.Parse([]byte(other)))
+			}
+			if got := used.Keep(p.Parse(line)); got != kept {
+				t.Fatalf("%s on %q: %v with a new Filter, %v with a used one", expression, line, kept, got)
+			}
+			return kept, true
+		}
+
 		// A key in quotes is a field of that name; a bare one may be a role. Both are tried.
 		for _, k := range []string{quoteToken(key), key} {
 			// A text that is not a bare key by itself would run into the operator: "a!" and "=" make "a" and "!=".
 			if bare, err := parseExpr(k); err != nil || bare.op != opExists || bare.key != key {
 				continue
 			}
-			results := map[string]bool{}
-			for _, operator := range []string{"=", "!=", ">", ">=", "<", "<=", "~", "!~"} {
-				expression := k + operator + quoteToken(value)
-				c, err := Compile(expression, time.UTC)
-				if err != nil {
-					var syntax *SyntaxError
-					if !errors.As(err, &syntax) || syntax.Pos < 0 || syntax.Pos > len(expression) {
-						t.Fatalf("Compile(%q) error = %#v, want a SyntaxError inside the expression", expression, err)
-					}
+			// The level and the time are compared as what they are, in quotes or not.
+			typed := k == key && (roleOf(key) == roleLevel || roleOf(key) == roleTime)
+			// The value is tried in quotes and, if it is a bare token by itself, without them.
+			results := map[string]map[string]bool{}
+			for _, v := range []string{quoteToken(value), value} {
+				if e, err := parseExpr(k + "=" + v); err != nil || e.value != value {
 					continue
 				}
-				e := p.Parse(line)
-				if e.Format == entry.FormatPlain {
-					return // a plain line is not asked about its fields
+				results[v] = map[string]bool{}
+				for _, operator := range []string{"=", "!=", ">", ">=", "<", "<=", "~", "!~"} {
+					if kept, ok := keep(k + operator + v); ok {
+						results[v][operator] = kept
+					}
 				}
-				fresh := Filter{Where: []Cond{c}}
-				results[operator] = fresh.Keep(e)
 
-				// A Filter that has seen other entries must decide the same.
-				used := Filter{Where: []Cond{c}}
-				for _, other := range []string{`{"a":"x \" y","b":{"c":{"d":1}}}`, `a=1 b="x \" y"`, `text`} {
-					used.Keep(p.Parse([]byte(other)))
+				check := func(a, b string, rule func(a, b bool) bool, what string) {
+					x, okX := results[v][a]
+					y, okY := results[v][b]
+					if okX != okY {
+						t.Fatalf("%s%s%s compiles and %s%s%s does not, or the other way", k, a, v, k, b, v)
+					}
+					if okX && !rule(x, y) {
+						t.Fatalf("%q, key %s, value %s: %s gives %v and %s gives %v, want them %s", line, k, v, a, x, b, y, what)
+					}
 				}
-				if got := used.Keep(p.Parse(line)); got != results[operator] {
-					t.Fatalf("%s on %q: %v with a new Filter, %v with a used one", expression, line, results[operator], got)
+				opposite := func(a, b bool) bool { return a != b }
+				notBoth := func(a, b bool) bool { return !a || !b }
+				implies := func(a, b bool) bool { return !a || b }
+				check("=", "!=", opposite, "opposite")
+				check("~", "!~", opposite, "opposite")
+				check(">", "<=", notBoth, "not both true")
+				check(">=", "<", notBoth, "not both true")
+				check(">", "<", notBoth, "not both true")
+				// What is equal is neither above nor below, as text or as a number.
+				if _, ordered := results[v][">="]; ordered {
+					check("=", ">=", implies, "the second with the first")
+					check("=", "<=", implies, "the second with the first")
+				}
+				// Equal by an order means equal, unless the quotes made the value text.
+				if r := results[v]; (v == value || typed) && r[">="] && r["<="] && !r["="] {
+					t.Fatalf("%q, key %s, value %s: >= and <= hold and = does not", line, k, v)
 				}
 			}
 
-			check := func(a, b string, rule func(a, b bool) bool, what string) {
-				x, okX := results[a]
-				y, okY := results[b]
-				if okX != okY {
-					t.Fatalf("%s%s compiles and %s%s does not, or the other way", k, a, k, b)
+			quoted, bare := results[quoteToken(value)], results[value]
+			if quoted == nil {
+				t.Fatalf("key %s: the value %q does not come back out of its quotes", k, value)
+			}
+			if bare != nil {
+				// Quotes change = and != alone, and only by taking away what is equal as a number.
+				if quoted["="] && !bare["="] {
+					t.Fatalf("%q, key %s, value %q: equal in quotes and not without them", line, k, value)
 				}
-				if okX && !rule(x, y) {
-					t.Fatalf("%q, key %s, value %q: %s gives %v and %s gives %v, want them %s", line, k, value, a, x, b, y, what)
+				unchanged := []string{">", ">=", "<", "<=", "~", "!~"}
+				if typed {
+					unchanged = append(unchanged, "=", "!=")
+				}
+				for _, operator := range unchanged {
+					if quoted[operator] != bare[operator] {
+						t.Fatalf("%q, key %s, value %q: %s gives %v in quotes and %v without", line, k, value, operator, quoted[operator], bare[operator])
+					}
 				}
 			}
-			opposite := func(a, b bool) bool { return a != b }
-			notBoth := func(a, b bool) bool { return !a || !b }
-			check("=", "!=", opposite, "opposite")
-			check("~", "!~", opposite, "opposite")
-			check(">", "<=", notBoth, "not both true")
-			check(">=", "<", notBoth, "not both true")
-			check(">", "<", notBoth, "not both true")
-			// Equal by an order means equal: above-or-equal and below-or-equal together.
-			if ge, ok := results[">="]; ok && ge && results["<="] && !results["="] {
-				t.Fatalf("%q, key %s, value %q: >= and <= hold and = does not", line, k, value)
+
+			// In quotes, equal is the very same text: a regular expression for that text and nothing else agrees.
+			// It reads a byte that is not UTF-8 as U+FFFD, so a value with that rune would match other text.
+			if !typed && !strings.ContainsRune(value, utf8.RuneError) {
+				if same, ok := keep(k + "~" + quoteToken("^"+regexp.QuoteMeta(value)+"$")); ok && same != quoted["="] {
+					t.Fatalf("%q, key %s, value %q: equal in quotes is %v, the same text is %v", line, k, value, quoted["="], same)
+				}
 			}
 		}
 	})

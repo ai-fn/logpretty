@@ -32,7 +32,7 @@ type Cond struct {
 	op      op
 
 	text  []byte         // the value as written
-	num   number         // the value as a number, if it is one
+	num   number         // the value as a number, if it is compared as one
 	isNum bool           // whether num holds the value
 	re    *regexp.Regexp // for ~ and !~
 	level entry.Level    // for a comparison with the level of an entry
@@ -73,8 +73,13 @@ func Compile(expression string, loc *time.Location) (Cond, error) {
 			msg = fmt.Sprintf("%q is not a time: want one such as 2026-10-11T12:00:00Z", e.value)
 		}
 	default:
-		// An order of strings would take "90ms" for more than "100ms" without a word of warning.
-		if c.num, c.isNum = parseNumber(c.text); !c.isNum && c.op != opEq && c.op != opNe {
+		// In quotes a value is text for = and !=: "042" is not 42 there. An order takes a number whatever the
+		// quotes, since an order of strings would take "90ms" for more than "100ms" without a word of warning.
+		order := c.op != opEq && c.op != opNe
+		if order || !e.quotedValue {
+			c.num, c.isNum = parseNumber(c.text)
+		}
+		if order && !c.isNum {
 			msg = fmt.Sprintf("%q is not a number, and >, >=, < and <= compare numbers", e.value)
 		}
 	}
@@ -154,7 +159,7 @@ func (c *Cond) matchValue(v entry.Value, f *Filter) bool {
 		return !c.re.Match(text)
 	}
 
-	// logfmt has no numbers and JSON often quotes them, so the kind of the value does not decide.
+	// logfmt has no numbers and JSON often quotes them, so the kind of the field does not decide.
 	if c.isNum {
 		if n, ok := parseNumber(text); ok {
 			return holds(c.op, n.compare(c.num))

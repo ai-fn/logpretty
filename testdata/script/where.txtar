@@ -1,8 +1,20 @@
 # --where keeps the entries that meet the expression, whatever their format; a plain line goes the way of
-# the entry before it. A number in quotes is a number too.
+# the entry before it. A number that the log keeps in quotes is a number too.
 stdin input.log
 exec logpretty --utc --where 'user_id=42'
 cmp stdout want
+! stderr .
+
+# A value that reads as a number finds every way to write that number; in quotes it is text, and finds
+# only what is written the very same way.
+stdin ids.log
+exec logpretty --where 'id=42'
+cmp stdout want_number
+! stderr .
+
+stdin ids.log
+exec logpretty --where 'id="042"'
+cmp stdout want_text
 ! stderr .
 
 # A key with dots looks into a nested object, and a flag given twice asks for both conditions.
@@ -39,12 +51,26 @@ panic: boom
 level=warn msg="slow request" user_id=42 latency=1.2s
 {"time":"2026-10-11T12:00:02Z","level":"info","msg":"request done","user_id":"42","http":{"status":200}}
 level=debug msg=tick
+-- ids.log --
+{"msg":"number","id":42}
+{"msg":"string","id":"42.0"}
+{"msg":"padded","id":"042"}
+msg=logfmt id=042
+{"msg":"other","id":"42a"}
 -- want --
 12:00:01.000 ERROR request failed  user_id=42 http={"status":502}
 panic: boom
 	main.go:30 +0x45
 WARN  slow request  user_id=42 latency=1.2s
 12:00:02.000 INFO  request done  user_id=42 http={"status":200}
+-- want_number --
+number  id=42
+string  id=42.0
+padded  id=042
+logfmt  id=042
+-- want_text --
+padded  id=042
+logfmt  id=042
 -- want_nested --
 12:00:01.000 ERROR request failed  user_id=42 http={"status":502}
 panic: boom

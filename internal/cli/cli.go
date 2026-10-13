@@ -69,10 +69,12 @@ Flags:
 Expressions:
   KEY                   the entry has the field
   KEY = VALUE           equal. Two numbers are compared as numbers, so 42
-                        finds 42, "42" and 42.0; anything else as text
+                        finds 42, 42.0 and the string "42"; anything else
+                        is compared as text, and so is a VALUE in quotes
   KEY != VALUE          not equal, or the entry has no such field
-  KEY > VALUE           above, as numbers; also >=, < and <=. The level and
-                        the time have an order of their own, see below
+  KEY > VALUE           above, as numbers; also >=, < and <=. Quotes change
+                        nothing here. The level and the time have an order
+                        of their own, see below
   KEY ~ REGEXP          the regular expression (RE2) matches a part of the
                         value
   KEY !~ REGEXP         it does not, or the entry has no such field
@@ -83,8 +85,8 @@ Expressions:
   A key with dots looks into nested objects: http.status. The keys msg, level
   and time stand for the message, the level and the time of an entry whatever
   its own keys are. A level is compared by its severity and a time as a
-  moment: level>=warn, time>=2026-10-11T12:00:00Z. A time without a zone is
-  local, or UTC with --utc.
+  moment, in quotes or not: level>=warn, time>=2026-10-11T12:00:00Z. A time
+  without a zone is local, or UTC with --utc.
 
 Examples:
   kubectl logs -f pod | logpretty

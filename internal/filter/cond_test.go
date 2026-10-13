@@ -25,13 +25,13 @@ func matches(t *testing.T, loc *time.Location, expression, line string) bool {
 }
 
 func TestCondOnFields(t *testing.T) {
-	const line = `{"user_id":42,"id":"42","ratio":0.5,"big":9007199254740993,"ok":true,"err":null,"empty":"",` +
+	const line = `{"user_id":42,"id":"42","code":"042","version":"1.10","ratio":0.5,"big":9007199254740993,"ok":true,"err":null,"empty":"",` +
 		`"text":"slow request","note":"say \"hi\"\n","http":{"status":502,"path":"/a b"},"tags":["x","y"]}`
 
 	tests := map[string]bool{
 		// A number.
 		`user_id=42`: true, `user_id=43`: false, `user_id!=42`: false, `user_id!=43`: true,
-		`user_id=42.0`: true, `user_id=042`: true, `user_id="42"`: true, `user_id=4.2e1`: true, `user_id=forty-two`: false,
+		`user_id=42.0`: true, `user_id=042`: true, `user_id=4.2e1`: true, `user_id=forty-two`: false,
 		`user_id>41`: true, `user_id>42`: false, `user_id>=42`: true, `user_id>=43`: false,
 		`user_id<43`: true, `user_id<42`: false, `user_id<=42`: true, `user_id<=41`: false,
 		`user_id~^4`: true, `user_id!~^4`: false, `user_id`: true,
@@ -40,6 +40,16 @@ func TestCondOnFields(t *testing.T) {
 		`big=9007199254740993`: true, `big=9007199254740992`: false, `big>9007199254740992`: true, `big<9007199254740994`: true,
 		// A string that holds a number is compared as one.
 		`id=42`: true, `id=42.0`: true, `id!=42`: false, `id>=42`: true, `id<42`: false,
+		`code=42`: true, `code=042`: true, `code!=42`: false, `version=1.1`: true, `version=1.10`: true,
+		// In quotes a value is text for = and !=: only the very same text is equal to it.
+		`user_id="42"`: true, `user_id="42.0"`: false, `user_id="042"`: false, `user_id!="42"`: false, `user_id!="42.0"`: true,
+		`id="42"`: true, `id="42.0"`: false, `id!="42.0"`: true,
+		`code="042"`: true, `code="42"`: false, `code!="42"`: true, `code!="042"`: false,
+		`version="1.10"`: true, `version="1.1"`: false, `version!="1.1"`: true,
+		`ratio="0.5"`: true, `ratio="0.50"`: false, `big="9007199254740993"`: true, `big="9007199254740993.0"`: false,
+		`http.status="502"`: true, `http.status="502.0"`: false, `"user_id"="42"`: true, `"user_id"="42.0"`: false,
+		// An order compares numbers, in quotes or not.
+		`user_id>="42.0"`: true, `user_id>"41"`: true, `user_id<"42"`: false, `code<="42"`: true, `code>"42"`: false,
 		// A string.
 		`text="slow request"`: true, `text=slow`: false, `text!=slow`: true, `text!="slow request"`: false,
 		`text~slow`: true, `text~^request`: false, `text!~^request`: true, `text!~slow`: false, `text~"w r"`: true,
@@ -73,6 +83,7 @@ func TestCondOnLogfmt(t *testing.T) {
 
 	tests := map[string]bool{
 		`status=200`: true, `status=200.0`: true, `status>=200`: true, `status<200`: false, `status!=404`: true,
+		`status="200"`: true, `status="200.0"`: false, `status!="200.0"`: true, `dur="1.5"`: true, `dur="1.50"`: false, `dur=1.50`: true,
 		`dur>1`: true, `dur<=1.5`: true, `path=/a`: true, `path~^/`: true, `path>1`: false,
 		`http.status=502`: true, `"http.status"=502`: true,
 		`note="a \"b\""`: true, `note~"\"b\"$"`: true,
@@ -103,6 +114,8 @@ func TestCondOnLevel(t *testing.T) {
 				// A regular expression sees the name every log is brought to, not what this one wrote.
 				`level~^warn$`: true, `level~WARN`: false, `level!~err`: true, `level!~^w`: false, `level`: true,
 				`"level"=WARN`: true, `"level"=warn`: false,
+				// Quotes do not make a level text.
+				`level="warning"`: true, `level>="warn"`: true, `level!="WARN"`: false,
 			},
 		},
 		{
@@ -116,7 +129,10 @@ func TestCondOnLevel(t *testing.T) {
 		{
 			name: "level as a number of pino",
 			line: `{"level":40,"msg":"x"}`,
-			want: map[string]bool{`level=warn`: true, `level>=warn`: true, `level~warn`: true, `"level"=40`: true, `"level">=40`: true},
+			want: map[string]bool{
+				`level=warn`: true, `level>=warn`: true, `level~warn`: true, `"level"=40`: true, `"level">=40`: true,
+				`"level"=40.0`: true, `"level"="40"`: true, `"level"="40.0"`: false,
+			},
 		},
 		{
 			name: "level implied by the format",
@@ -179,6 +195,8 @@ func TestCondOnTime(t *testing.T) {
 				// A time without a zone is in the zone of the output, here UTC.
 				`time="2026-10-11 12:00:00"`: true, `time=2026-10-11T12:00:00`: true,
 				`time=1791720000`: true, `time>=1791720000000`: true, `time<1791720000`: false,
+				// Quotes do not make a time text.
+				`time="2026-10-11T15:00:00+03:00"`: true, `time="1791720000"`: true,
 				// A regular expression sees the text of the field.
 				`time~T12:`: true, `time~^2026`: true, `time!~T12:`: false, `time~15:00`: false, `time`: true,
 				`"time"~T12:`: true, `"time"=2026-10-11T12:00:00Z`: true, `"time"=2026-10-11T15:00:00+03:00`: false,
@@ -188,7 +206,10 @@ func TestCondOnTime(t *testing.T) {
 			name: "time under another key",
 			loc:  time.UTC,
 			line: `{"ts":1791720000,"msg":"x"}`,
-			want: map[string]bool{`time=2026-10-11T12:00:00Z`: true, `time~^179`: true, `time`: true, `"time"`: false, `ts=1791720000`: true},
+			want: map[string]bool{
+				`time=2026-10-11T12:00:00Z`: true, `time~^179`: true, `time`: true, `"time"`: false, `ts=1791720000`: true,
+				`ts=1791720000.0`: true, `ts="1791720000"`: true, `ts="1791720000.0"`: false,
+			},
 		},
 		{
 			name: "a time without a zone, in the zone of the output",
@@ -249,7 +270,12 @@ func TestCondOnMessage(t *testing.T) {
 		{
 			name: "a msg that is not the message is a field like any other",
 			line: `{"msg":42,"n":1}`,
-			want: map[string]bool{`msg=42`: true, `msg>41`: true, `msg`: true, `"msg"=42`: true},
+			want: map[string]bool{`msg=42`: true, `msg>41`: true, `msg`: true, `"msg"=42`: true, `msg=42.0`: true, `msg="42"`: true, `msg="42.0"`: false},
+		},
+		{
+			name: "a message that reads as a number",
+			line: `{"message":"042","n":1}`,
+			want: map[string]bool{`msg=42`: true, `msg="042"`: true, `msg="42"`: false, `msg!="42"`: true, `msg>="42"`: true},
 		},
 		{
 			name: "no message",
@@ -306,7 +332,7 @@ func TestCompileErrors(t *testing.T) {
 	}
 
 	// What a typed key refuses, the same key takes in quotes or with a regular expression.
-	for _, in := range []string{`level~loud`, `"level"=loud`, `"level">40`, `time~yesterday`, `"time"=yesterday`, `"time">5`, `msg=abc`, `msg>5`} {
+	for _, in := range []string{`level~loud`, `"level"=loud`, `"level">40`, `time~yesterday`, `"time"=yesterday`, `"time">5`, `msg=abc`, `msg>5`, `ms>"100"`, `ms="100ms"`} {
 		if _, err := Compile(in, time.UTC); err != nil {
 			t.Errorf("Compile(%q) fails: %v", in, err)
 		}
@@ -396,7 +422,7 @@ func TestKeepWithSeveralConditions(t *testing.T) {
 }
 
 func TestKeepWithConditionsDoesNotAllocate(t *testing.T) {
-	expressions := []string{`user_id=42`, `http.status>=500`, `note="say \"hi\""`, `level>=warn`, `time>=2026-10-11T00:00:00Z`, `nope!=1`}
+	expressions := []string{`user_id=42`, `user_id="42"`, `http.status>=500`, `note="say \"hi\""`, `level>=warn`, `time>=2026-10-11T00:00:00Z`, `nope!=1`}
 	if !raceEnabled {
 		expressions = append(expressions, `msg~slow`, `level~^warn$`, `time~T12:`)
 	}
