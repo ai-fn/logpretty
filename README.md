@@ -28,7 +28,7 @@ kubectl logs -f pod | logpretty --level warn --where 'user_id=42' --fields msg,l
 ```
 
 <p align="center">
-  <img src="assets/demo.svg" width="681" alt="logpretty output in a terminal: the time and the keys are faint, each level has its own style, a plain line is left as it is" />
+  <img src="assets/demo.gif" width="800" alt="A terminal: five raw log lines in JSON, logfmt and plain text; the same lines printed by logpretty, with the time and the keys faint and each level in its own color; then only the warnings and errors of one user, with two fields" />
 </p>
 
 ## Features
@@ -255,6 +255,7 @@ checksums.
 | `make vuln` | Check dependencies and the standard library for known vulnerabilities |
 | `make fuzz FUZZ=FuzzName PKG=./path` | Fuzz one target |
 | `make bench` | Run benchmarks |
+| `make demo` | Record `assets/demo.gif` from `assets/demo.tape`; needs [vhs](https://github.com/charmbracelet/vhs) |
 | `make snapshot` | Build the release archives into `dist/` without publishing them; needs [GoReleaser](https://goreleaser.com) v2 |
 | `make help` | List all targets |
 
@@ -272,9 +273,9 @@ internal/render/      # formats an entry as a line of text (--fields, --no-time)
 internal/term/        # decides whether to color the output: the --color mode, the terminal, NO_COLOR
 internal/golden/      # test helper: compares output with golden files
 testdata/script/      # end-to-end scenarios run against the real binary (testscript)
-assets/               # logo, picture of the output
+assets/               # logo, the recording of the output and what it is made from
 .github/workflows/    # CI, and the release that a version tag starts
-Makefile              # build, test, lint, fuzz, bench, vuln, snapshot
+Makefile              # build, test, lint, fuzz, bench, vuln, snapshot, demo
 .golangci.yml         # golangci-lint v2 config
 .goreleaser.yaml      # GoReleaser config: what a release is built from
 ```

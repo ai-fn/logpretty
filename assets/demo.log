@@ -1,0 +1,5 @@
+{"time":"2026-10-11T12:00:00.123Z","level":"info","msg":"server started","port":8080}
+time=2026-10-11T12:00:01Z level=warn msg="slow request" latency=1.2s path=/api/v1/users user_id=42
+web-1  | {"time":"2026-10-11T12:00:02Z","level":"error","msg":"query failed","user_id":42,"db":{"host":"pg-1","retries":3}}
+panic: runtime error: index out of range
+{"time":"2026-10-11T12:00:03Z","level":"error","msg":"query failed","user_id":7,"db":{"host":"pg-2","retries":1}}

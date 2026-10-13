@@ -5,7 +5,7 @@ PKG      :=
 FUZZ     :=
 FUZZTIME ?= 30s
 
-.PHONY: help build test lint fuzz bench vuln check snapshot
+.PHONY: help build test lint fuzz bench vuln check snapshot demo
 
 help: ## Show available targets
 	@awk -F':.*## ' '/^[a-z]+:.*## /{printf "  %-9s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -35,3 +35,6 @@ check: test lint ## Run tests and linter (the pre-commit checks)
 
 snapshot: ## Build the release archives into dist/ with GoReleaser, publishing nothing
 	goreleaser release --snapshot --clean
+
+demo: build ## Record assets/demo.gif with vhs
+	PATH="$(CURDIR)/bin:$$PATH" vhs assets/demo.tape
