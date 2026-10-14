@@ -3,6 +3,7 @@ package filter
 import (
 	"cmp"
 	"errors"
+	"fmt"
 	"math/big"
 	"regexp"
 	"slices"
@@ -305,6 +306,62 @@ func FuzzKeep(f *testing.F) {
 				if same, ok := keep(k + "~" + quoteToken("^"+regexp.QuoteMeta(value)+"$")); ok && same != quoted["="] {
 					t.Fatalf("%q, key %s, value %q: equal in quotes is %v, the same text is %v", line, k, value, quoted["="], same)
 				}
+			}
+		}
+	})
+}
+
+// FuzzKeepSources plays a stream of entries and plain lines of a few sources against a model of the rule:
+// a plain line goes the way of the last entry of its source, or of the stream when the source has none.
+func FuzzKeepSources(f *testing.F) {
+	f.Add(byte(0), []byte{0x10, 0x31, 0x02, 0x13, 0x03, 0x40})
+	f.Add(byte(0), []byte{0x02, 0x10, 0x12, 0x21, 0x02, 0x33, 0x42})
+	f.Add(byte(0), []byte{0x04, 0x08, 0x0c, 0x10, 0x15, 0x12, 0x06})
+	f.Add(byte(1), []byte{0x10, 0x31, 0x02, 0x13})
+	f.Add(byte(2), []byte{0x10, 0x31, 0x02, 0x13})
+	f.Fuzz(func(t *testing.T, mode byte, events []byte) {
+		// A limit of three sources, so that a short stream runs into it.
+		const limit = 3
+		p := parse.Parser{Loc: time.UTC}
+		filter := Filter{MinLevel: entry.LevelError, Plain: PlainMode(mode % 3), limit: limit}
+		lastKept, bySource := false, map[string]bool{}
+		for i, ev := range events {
+			// The low two bits: an error, an info entry, a plain line or a cut one; the rest: the source, 0 for none.
+			kind, src := ev&3, ev>>2
+			name := ""
+			if src > 0 {
+				name = fmt.Sprintf("s%d", src)
+			}
+			line := map[byte]string{0: `{"level":"error","msg":"x"}`, 1: `{"level":"info","msg":"x"}`, 2: "plain"}[kind]
+			if name != "" {
+				line = name + " | " + line
+			}
+			var got, want bool
+			switch {
+			case kind >= 2 && filter.Plain != PlainFollow:
+				if kind == 3 {
+					got = filter.KeepPlain(nil)
+				} else {
+					got = filter.Keep(p.Parse([]byte(line)))
+				}
+				want = filter.Plain == PlainShow
+			case kind == 3:
+				got, want = filter.KeepPlain(nil), lastKept
+			case kind == 2:
+				got = filter.Keep(p.Parse([]byte(line)))
+				want = lastKept
+				if v, ok := bySource[name]; ok && name != "" {
+					want = v
+				}
+			default:
+				got, want = filter.Keep(p.Parse([]byte(line))), kind == 0
+				lastKept = want
+				if _, ok := bySource[name]; name != "" && (ok || len(bySource) < limit) {
+					bySource[name] = want
+				}
+			}
+			if got != want {
+				t.Fatalf("event %d (%q) of %x: kept %v, want %v", i, line, events, got, want)
 			}
 		}
 	})

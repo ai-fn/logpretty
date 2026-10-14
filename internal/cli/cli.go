@@ -49,8 +49,10 @@ Flags:
       --plain MODE      what to do with the lines that are not entries, such
                         as a stack trace: follow (the default), show or hide.
                         Under --level or --where, follow shows a line only
-                        after an entry that is shown; hide hides every such
-                        line even when nothing is filtered
+                        after an entry that is shown: of the same container
+                        or pod, when the lines carry its name (docker
+                        compose, kubectl logs --prefix); hide hides every
+                        such line even when nothing is filtered
       --fields LIST     show only these fields, in this order: keys separated
                         by commas, with dots for nested ones, as in
                         latency,http.status. The time and the level are shown

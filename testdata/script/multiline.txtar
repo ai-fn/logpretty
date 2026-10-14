@@ -15,6 +15,13 @@ exec logpretty --utc --level error
 cmp stdout want_pod_error
 ! stderr .
 
+# docker compose mixes the lines of its containers: a stack trace goes the way of the last entry of its own
+# container, whatever the others write in between.
+stdin compose.log
+exec logpretty --utc --level error
+cmp stdout want_compose
+! stderr .
+
 # The time kubectl wrote is the time --where compares.
 stdin stamps.log
 exec logpretty --utc --where 'time>=2026-10-11T12:00:01Z'
@@ -68,3 +75,20 @@ ValueError: bad template
 12:00:01.000 INFO  on time
 12:00:02.000 WARN  late
 12:00:02.100 	at late
+-- compose.log --
+web-1  | {"time":"2026-10-11T12:00:00Z","level":"info","msg":"started"}
+api-1  | {"time":"2026-10-11T12:00:00Z","level":"info","msg":"started"}
+web-1  | {"time":"2026-10-11T12:00:01Z","level":"error","msg":"request failed"}
+web-1  | Traceback (most recent call last):
+api-1  | {"time":"2026-10-11T12:00:01Z","level":"info","msg":"health ok"}
+web-1  |   File "/app/views.py", line 12, in index
+api-1  | GET /health 200
+web-1  |     return render(request, template_name=name, context=ctx)
+web-1  | ValueError: bad template
+api-1  | {"time":"2026-10-11T12:00:02Z","level":"info","msg":"health ok"}
+-- want_compose --
+web-1  | 12:00:01.000 ERROR request failed
+web-1  | Traceback (most recent call last):
+web-1  |   File "/app/views.py", line 12, in index
+web-1  |     return render(request, template_name=name, context=ctx)
+web-1  | ValueError: bad template
