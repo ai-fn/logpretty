@@ -289,9 +289,15 @@ colors in the `auto` mode; use `--color=always` there.
 
 Requires Go 1.26+, [golangci-lint](https://golangci-lint.run) v2 and `make`. CI runs the tests
 on Linux, macOS and Windows, golangci-lint, `go mod tidy`, [govulncheck](https://go.dev/doc/security/vuln/)
-and a check of the GoReleaser config on every pull request and every push to `main`. A tag such as
-`v0.1.0` starts the release: the archives are built by GoReleaser and published with their
-checksums.
+and a check of the GoReleaser config on every pull request and every push to `main`, `develop`
+and the `feature/`, `release/` and `hotfix/` branches. A tag such as `v0.1.0` starts the release:
+the archives are built by GoReleaser and published with their checksums. A tag such as
+`v0.2.0-rc.1` publishes a prerelease and leaves the Homebrew cask as it is.
+
+The branches follow [GitFlow](https://nvie.com/posts/a-successful-git-branching-model/): work goes
+into `feature/…` branches off `develop`; a release is prepared on `release/vX.Y.Z`, tried as
+`vX.Y.Z-rc.N`, then merged into `main`, where every merge commit is a tagged release. An urgent fix
+goes into a `hotfix/vX.Y.Z` branch off `main` and is merged into both `main` and `develop`.
 
 | Command | Description |
 |---|---|
@@ -329,7 +335,8 @@ Makefile              # build, test, lint, fuzz, bench, vuln, snapshot, demo
 
 ## Contributing
 
-Bug reports and pull requests are welcome. Run `make check` before opening a pull request.
+Bug reports and pull requests are welcome. Open a pull request against `develop`, and run
+`make check` before you do.
 
 ## License
 
