@@ -25,6 +25,10 @@ func dumpEntry(b *strings.Builder, n int, line []byte, e *entry.Entry) {
 		}
 	}
 	if e.Format == entry.FormatPlain {
+		// A plain line has a time too: the one a collector wrote.
+		if !e.Time.IsZero() {
+			fmt.Fprintf(b, "  time: %s\n", e.Time.UTC().Format(time.RFC3339Nano))
+		}
 		return
 	}
 	fmt.Fprintf(b, "  level: %s\n", e.Level)

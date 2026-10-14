@@ -2,7 +2,7 @@ line 1: json
   in: "2026-10-11T12:00:00.123456789Z {\"level\":\"info\",\"msg\":\"started\"}"
   stamp: "2026-10-11T12:00:00.123456789Z"
   level: info
-  time: -
+  time: 2026-10-11T12:00:00.123456789Z
   roles: time=- level=level msg=msg
   fields:
     "level"=<string>"info"
@@ -11,7 +11,7 @@ line 2: logfmt
   in: "2026-10-11T12:00:01.000000000Z level=info msg=hello a=1"
   stamp: "2026-10-11T12:00:01.000000000Z"
   level: info
-  time: -
+  time: 2026-10-11T12:00:01Z
   roles: time=- level=level msg=msg
   fields:
     "level"=<string>"info"
@@ -20,11 +20,12 @@ line 2: logfmt
 line 3: plain
   in: "2026-10-11T12:00:02.500000000Z plain message"
   stamp: "2026-10-11T12:00:02.500000000Z"
+  time: 2026-10-11T12:00:02.5Z
 line 4: json
   in: "2026-10-11T12:00:03.000000000Z {\"level\":\"error\",\"msg\":\"boom\"}"
   stamp: "2026-10-11T12:00:03.000000000Z"
   level: error
-  time: -
+  time: 2026-10-11T12:00:03Z
   roles: time=- level=level msg=msg
   fields:
     "level"=<string>"error"
@@ -45,7 +46,7 @@ line 6: json
   source: "pod/web-1/app"
   stamp: "2026-10-11T12:00:04.000000000Z"
   level: info
-  time: -
+  time: 2026-10-11T12:00:04Z
   roles: time=- level=level msg=msg
   fields:
     "level"=<string>"info"
@@ -55,23 +56,28 @@ line 7: plain
   collector: "[pod/web-1/app]"
   source: "pod/web-1/app"
   stamp: "2026-10-11T12:00:05.000000000Z"
+  time: 2026-10-11T12:00:05Z
 line 8: plain
   in: "[pod/web-1/app] 2026-10-11T12:00:05.000000000Z "
   collector: "[pod/web-1/app]"
   source: "pod/web-1/app"
   stamp: "2026-10-11T12:00:05.000000000Z"
+  time: 2026-10-11T12:00:05Z
 line 9: plain
   in: "[pod/web-1/app] 2026-10-11T12:00:05.000000000Z goroutine 1 [running]:"
   collector: "[pod/web-1/app]"
   source: "pod/web-1/app"
   stamp: "2026-10-11T12:00:05.000000000Z"
+  time: 2026-10-11T12:00:05Z
 line 10: plain
   in: "[pod/web-1/app] 2026-10-11T12:00:05.000000000Z main.main()"
   collector: "[pod/web-1/app]"
   source: "pod/web-1/app"
   stamp: "2026-10-11T12:00:05.000000000Z"
+  time: 2026-10-11T12:00:05Z
 line 11: plain
   in: "[pod/web-1/app] 2026-10-11T12:00:05.000000000Z \t/app/main.go:12 +0x1d"
   collector: "[pod/web-1/app]"
   source: "pod/web-1/app"
   stamp: "2026-10-11T12:00:05.000000000Z"
+  time: 2026-10-11T12:00:05Z

@@ -30,7 +30,7 @@ line 4: json
   source: "worker-2"
   stamp: "2026-10-11T12:00:00.123456789Z"
   level: warn
-  time: -
+  time: 2026-10-11T12:00:00.123456789Z
   roles: time=- level=level msg=msg
   fields:
     "level"=<string>"warn"

@@ -85,10 +85,19 @@ func TestAppendEntry(t *testing.T) {
 
 		{name: "collector prefix", line: `web-1    | {"level":"info","msg":"started"}`, want: `web-1    | INFO  started`},
 		{
-			name: "collector timestamp is not the time of the entry",
+			name: "the time a collector wrote is the time of an entry without one",
 			line: `2026-10-11T12:00:00.123456789Z {"level":"error","msg":"boom"}`,
-			want: `2026-10-11T12:00:00.123456789Z ERROR boom`,
+			want: `15:00:00.123 ERROR boom`,
 		},
+		{
+			name: "the time of the entry wins over the one a collector wrote",
+			line: `[pod/web-1/app] 2026-10-11T12:00:00Z {"time":"2026-10-11T13:00:00Z","msg":"x"}`,
+			want: `[pod/web-1/app] 16:00:00.000 x`,
+		},
+		{name: "the time a collector wrote before a plain line", line: "2026-10-11T12:00:00Z \tat x", want: "15:00:00.000 \tat x"},
+		{name: "a pod and its time before a plain line", line: "[pod/web-1/app] 2026-10-11T12:00:00Z hello", want: "[pod/web-1/app] 15:00:00.000 hello"},
+		{name: "the time a collector wrote alone", line: "web-1 | 2026-10-11T15:00:00+03:00", want: "web-1 | 15:00:00.000"},
+		{name: "a time without a zone after a bar", line: `web | 2026-10-11 12:00:00,5 {"msg":"x"}`, want: `web | 12:00:00.500 x`},
 		{
 			name: "collector prefix and a time of its own",
 			line: `web-1 | {"time":"2026-10-11T12:00:00Z","msg":"x"}`,
@@ -220,7 +229,7 @@ func TestAppendEntryTheme(t *testing.T) {
 			name:  "a plain line after a pod name and a timestamp",
 			theme: tags,
 			line:  "[pod/web-1/app] 2026-10-11T12:00:00Z \tat x",
-			want:  "<p>[pod/web-1/app]</> <p>2026-10-11T12:00:00Z</> \tat x",
+			want:  "<p>[pod/web-1/app]</> <t>15:00:00.000</> \tat x",
 		},
 		{
 			name:  "a part without a style is not reset",

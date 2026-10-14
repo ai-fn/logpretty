@@ -282,29 +282,20 @@ func FuzzRender(f *testing.F) {
 		if tabs := strings.Count(got, "\t"); structured && tabs != prefixTabs {
 			t.Fatalf("line %q is shown as %q with %d tabs, want the %d of its prefix", line, got, tabs, prefixTabs)
 		}
-		// A plain line is the line itself, made safe, but the space after what a collector wrote when nothing follows it.
+		// A plain line is the line itself, made safe, with the time a collector wrote in the time column, but the
+		// space after what the collector wrote when nothing follows it.
 		want := referenceSafe(strings.TrimPrefix(string(line), "\ufeff"))
+		if e.Stamp != nil {
+			want = strings.Replace(want, string(e.Stamp), e.Time.In(testLoc).Format(timeLayout), 1)
+		}
 		if (e.Collector != nil || e.Stamp != nil) && len(e.Body) == 0 {
 			want = strings.TrimSuffix(want, " ")
 		}
 		if want += "\n"; plain && got[1:] != want {
 			t.Fatalf("plain line %q\n got %q\nwant %q", line, got[1:], want)
 		}
-		// An entry without fields is what the collector wrote and the rest of the line, one space apart.
-		if !plain && !structured {
-			want := referenceSafe(strings.TrimPrefix(string(line), "\ufeff"))
-			if e.Collector != nil || e.Stamp != nil {
-				parts := []string{}
-				for _, part := range [][]byte{e.Collector, e.Stamp, e.Body} {
-					if len(part) > 0 {
-						parts = append(parts, string(part))
-					}
-				}
-				want = referenceSafe(strings.Join(parts, " "))
-			}
-			if got[1:] != want+"\n" {
-				t.Fatalf("entry without fields %q\n got %q\nwant %q", line, got[1:], want+"\n")
-			}
+		if want := shownWithoutFields(line, e, false); !structured && got[1:] != want {
+			t.Fatalf("line without fields %q\n got %q\nwant %q", line, got[1:], want)
 		}
 
 		cut := string(r.AppendTruncated(nil, line, dropped))
@@ -340,9 +331,9 @@ func FuzzRender(f *testing.F) {
 
 				switch {
 				case !structured:
-					// A line that is printed as it is stays so, whatever was chosen.
-					if part != got[1:] {
-						t.Fatalf("%s of %q\n got %q\nwant %q", what, line, part, got[1:])
+					// A line that is printed as it is stays so, whatever was chosen, but for a hidden time.
+					if want := shownWithoutFields(line, e, noTime); part != want {
+						t.Fatalf("%s of %q\n got %q\nwant %q", what, line, part, want)
 					}
 				case part != "":
 					// Nothing at all is how an entry with nothing left is shown; anything else is one safe line.
@@ -373,4 +364,23 @@ func FuzzRender(f *testing.F) {
 			}
 		}
 	})
+}
+
+// shownWithoutFields is how a line without fields is shown: as written, or what a collector wrote, its time in the
+// time column unless it is hidden, and the rest of the line, one space apart.
+func shownWithoutFields(line []byte, e *entry.Entry, noTime bool) string {
+	if e.Collector == nil && e.Stamp == nil {
+		return referenceSafe(strings.TrimPrefix(string(line), "\ufeff")) + "\n"
+	}
+	parts := []string{}
+	if e.Collector != nil {
+		parts = append(parts, string(e.Collector))
+	}
+	if e.Stamp != nil && !noTime {
+		parts = append(parts, e.Time.In(testLoc).Format(timeLayout))
+	}
+	if len(e.Body) > 0 {
+		parts = append(parts, string(e.Body))
+	}
+	return referenceSafe(strings.Join(parts, " ")) + "\n"
 }

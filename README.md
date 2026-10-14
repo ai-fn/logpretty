@@ -169,9 +169,10 @@ entry. The spaces around the operator may be left out:
   inside the object `db`; arrays are not looked into. `msg`, `level` and `time` stand for the
   message, the level and the time of the entry, whatever key the log keeps them under:
   `level>=warn` compares by severity and `time>=2026-10-11T12:00:02Z` by the moment. A time without
-  a zone is local, or UTC with `--utc`; the timestamp a collector puts in front of a line is not
-  the time of the entry. A key in double quotes, as in `"level"=3`, is the top-level field of that
-  very name: it stands for nothing else and does not look into objects.
+  a zone is local, or UTC with `--utc`; the timestamp `kubectl logs --timestamps` or
+  `docker compose logs -t` puts in front of a line is the time of an entry without one.
+  A key in double quotes, as in `"level"=3`, is the top-level field of that very name: it stands
+  for nothing else and does not look into objects.
 - **Quotes.** A value with a space goes in double quotes, inside the quotes of the shell:
   `--where 'msg="slow request"'`. Inside the double quotes `\"` is a quote and `\\` a backslash;
   any other backslash stays, so `msg~"\d+ ms"` works. An empty value is written `""`. Without

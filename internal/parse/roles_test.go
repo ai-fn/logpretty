@@ -49,8 +49,9 @@ func rolesOf(t *testing.T, e *entry.Entry) roles {
 	if !e.Time.IsZero() {
 		got.time = e.Time.UTC().Format(time.RFC3339Nano)
 	}
-	if (got.time == "") != (e.TimeField() < 0) {
-		t.Errorf("Time = %v with TimeField = %d: one is set without the other", e.Time, e.TimeField())
+	// The one time without a field is the one a collector wrote.
+	if (got.time == "") != (e.TimeField() < 0 && e.Stamp == nil) {
+		t.Errorf("Time = %v with TimeField = %d and Stamp %q: one is set without the other", e.Time, e.TimeField(), e.Stamp)
 	}
 	// The one level without a field is the implied information of a Serilog event.
 	implied := e.Level == entry.LevelInfo && e.LevelField() < 0 && strings.EqualFold(got.timeKey, "@t")

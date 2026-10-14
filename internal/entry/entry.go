@@ -67,9 +67,9 @@ type Entry struct {
 	Body      []byte // the line past what the collector wrote
 	Prefix    []byte // the logger's own text before logfmt pairs, as in klog
 	Format    Format
-	Time      time.Time
-	Level     Level   // unknown unless a field names it; the one exception is a Serilog event without "@l", which is info
-	Fields    []Field // every pair of the line, in its original order
+	Time      time.Time // from the field TimeField names, or else from Stamp
+	Level     Level     // unknown unless a field names it; the one exception is a Serilog event without "@l", which is info
+	Fields    []Field   // every pair of the line, in its original order
 
 	// Positions in Fields plus one, so that the zero Entry has no roles.
 	timeField, levelField, msgField int

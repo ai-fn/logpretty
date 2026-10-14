@@ -616,9 +616,15 @@ func FuzzParse(f *testing.F) {
 				t.Fatalf("Parse(%q): a plain line has the fields %+v", line, pairsOf(e.Fields))
 			}
 		}
-		// The roles are those of the fields alone, whatever the parser held before.
-		fresh := entry.Entry{Fields: e.Fields}
+		// The roles are those of the fields alone, whatever the parser held before; the time a collector wrote
+		// stands in for a time field the entry lacks.
+		fresh := entry.Entry{Fields: e.Fields, Stamp: e.Stamp}
 		assignRoles(&fresh, testLoc)
+		if fresh.TimeField() < 0 && want.stamp != "" {
+			if fresh.Time, _ = referenceDateTime(want.stamp, testLoc); fresh.Time.IsZero() {
+				t.Fatalf("Parse(%q): the stamp %q is not a time", line, want.stamp)
+			}
+		}
 		if got, want := rolesOf(t, e), rolesOf(t, &fresh); got != want {
 			t.Fatalf("Parse(%q): roles %+v, want %+v", line, got, want)
 		}

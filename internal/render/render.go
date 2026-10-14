@@ -38,6 +38,9 @@ func (r *Renderer) AppendEntry(dst []byte, e *entry.Entry) []byte {
 		}
 		var sep string
 		dst, sep = r.appendCollector(dst, e)
+		if !e.Time.IsZero() && !r.NoTime {
+			dst, sep = r.appendTime(append(dst, sep...), e), " "
+		}
 		if len(e.Body) > 0 {
 			dst = appendSafe(append(dst, sep...), e.Body)
 		}
@@ -48,27 +51,24 @@ func (r *Renderer) AppendEntry(dst []byte, e *entry.Entry) []byte {
 	// The separator is written before a part, not after it, so that a part the entry lacks leaves no spaces behind.
 	dst, sep := r.appendCollector(dst, e)
 
+	hasTime := !e.Time.IsZero()
+	hideTime := hasTime && r.NoTime
+	showTime := hasTime && !hideTime
+	// found: whether anything asked for is shown. Without a selection only a hidden time can empty an entry,
+	// so a blank message still gets its line.
+	found := (sel == nil && !hideTime) || (showTime && sel != nil && sel.time)
+	// The time a collector wrote stays where it wrote it, before the logger's own text.
+	stampTime := showTime && e.TimeField() < 0
+	if stampTime {
+		dst, sep = r.appendTime(append(dst, sep...), e), " "
+	}
 	// The logger's own text, like a plain line, keeps its tabs; only the parts built here write them out.
 	if len(e.Prefix) > 0 {
 		dst = appendSafe(append(dst, sep...), e.Prefix)
 		sep = " "
 	}
-	hasTime := !e.Time.IsZero()
-	hideTime := hasTime && r.NoTime
-	// found: whether anything asked for is shown. Without a selection only a hidden time can empty an entry,
-	// so a blank message still gets its line.
-	found := sel == nil && !hideTime
-	if hasTime && !hideTime {
-		loc := r.Loc
-		if loc == nil {
-			loc = time.Local
-		}
-		dst = append(append(dst, sep...), th.Time...)
-		dst = th.end(e.Time.In(loc).AppendFormat(dst, timeLayout), th.Time)
-		sep = " "
-		if sel != nil && sel.time {
-			found = true
-		}
+	if showTime && !stampTime {
+		dst, sep = r.appendTime(append(dst, sep...), e), " "
 	}
 	// The level may be known without a field: a Serilog event implies it.
 	hasLevel := e.Level > entry.LevelUnknown && int(e.Level) < len(levelNames)
@@ -122,16 +122,22 @@ func (r *Renderer) AppendEntry(dst []byte, e *entry.Entry) []byte {
 }
 
 // appendCollector appends, faint, what a log collector wrote in front of the line, and returns the separator
-// that the next part needs.
+// that the next part needs. Its timestamp is the time column instead.
 func (r *Renderer) appendCollector(dst []byte, e *entry.Entry) ([]byte, string) {
-	th, sep := &r.Theme, ""
-	for _, part := range [...][]byte{e.Collector, e.Stamp} {
-		if len(part) > 0 {
-			dst = th.end(appendSafe(append(append(dst, sep...), th.Prefix...), part), th.Prefix)
-			sep = " "
-		}
+	if len(e.Collector) == 0 {
+		return dst, ""
 	}
-	return dst, sep
+	th := &r.Theme
+	return th.end(appendSafe(append(dst, th.Prefix...), e.Collector), th.Prefix), " "
+}
+
+// appendTime appends the time column, in the zone of the output.
+func (r *Renderer) appendTime(dst []byte, e *entry.Entry) []byte {
+	th, loc := &r.Theme, r.Loc
+	if loc == nil {
+		loc = time.Local
+	}
+	return th.end(e.Time.In(loc).AppendFormat(append(dst, th.Time...), timeLayout), th.Time)
 }
 
 // appendSelected appends the fields of sel that the entry has, in the order of sel, and reports whether it had

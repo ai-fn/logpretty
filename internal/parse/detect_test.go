@@ -411,8 +411,8 @@ func TestParse(t *testing.T) {
 				t.Errorf("Parse(%q): Line = %q, want the line itself", tt.line, e.Line)
 			}
 			if tt.format == entry.FormatPlain {
-				if got := rolesOf(t, e); got != (roles{}) {
-					t.Errorf("Parse(%q): a plain line has the roles %+v", tt.line, got)
+				if got := rolesOf(t, e); got != (roles{time: got.time}) || (got.time == "") != (e.Stamp == nil) {
+					t.Errorf("Parse(%q): a plain line has the roles %+v, want only the time of its stamp %q", tt.line, got, e.Stamp)
 				}
 			}
 		})
@@ -464,9 +464,9 @@ func TestParseAssignsRoles(t *testing.T) {
 			want: roles{"2026-10-11T12:00:00Z", entry.LevelDebug, "ts", "lvl", "msg"},
 		},
 		{
-			name: "prefixed JSON takes the time from a field, not from the prefix",
+			name: "prefixed JSON without a time field takes the time of the prefix",
 			line: `2026-10-11T12:00:00Z {"level":"error","message":"x"}`,
-			want: roles{level: entry.LevelError, levelKey: "level", msgKey: "message"},
+			want: roles{time: "2026-10-11T12:00:00Z", level: entry.LevelError, levelKey: "level", msgKey: "message"},
 		},
 		{
 			name: "time without a zone is in the zone of the parser",
@@ -667,9 +667,13 @@ func TestSplitCollector(t *testing.T) {
 			// Clipped, so that a read past the end of the line panics instead of finding spare capacity.
 			line := slices.Clip([]byte(tt.line))
 
-			collector, source, gotStamp, body := splitCollector(line)
+			collector, source, gotStamp, body, when := splitCollector(line)
+			// The time of a strict stamp is read once, here; its zone is its own.
+			if want, err := time.Parse(time.RFC3339Nano, tt.wantStamp); (err == nil) != !when.IsZero() || (!when.Equal(want) && err == nil) {
+				t.Errorf("splitCollector(%q): time %v, want the time of %q", tt.line, when, tt.wantStamp)
+			}
 			// With spare capacity, so that a part that runs to the end of the line shows it unless it is clipped.
-			_, _, _, spareBody := splitCollector(append(make([]byte, 0, len(line)+8), line...))
+			_, _, _, spareBody, _ := splitCollector(append(make([]byte, 0, len(line)+8), line...))
 			if cap(spareBody) != len(spareBody) {
 				t.Errorf("splitCollector(%q): body has %d spare bytes, want none", tt.line, cap(spareBody)-len(spareBody))
 			}
@@ -729,5 +733,43 @@ func TestNameBytes(t *testing.T) {
 		if want := isAlnum(byte(c)) || c == '.' || c == '_' || c == '-'; nameBytes[c] != want {
 			t.Errorf("nameBytes[%#x] = %v, want %v", c, nameBytes[c], want)
 		}
+	}
+}
+
+// An entry without a time of its own, and a plain line, take the time a collector wrote.
+func TestParseTimeFromStamp(t *testing.T) {
+	moscow := time.FixedZone("test", 3*60*60)
+	at := func(s string) time.Time {
+		tm, err := time.Parse(time.RFC3339Nano, s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tm
+	}
+	tests := []struct {
+		name, line string
+		want       time.Time
+		timeField  int
+	}{
+		{name: "a plain line after a pod", line: "[pod/a/b] 2026-10-11T12:00:00.5Z \tat x", want: at("2026-10-11T12:00:00.5Z"), timeField: -1},
+		{name: "a stamp alone", line: "2026-10-11T15:00:00+03:00", want: at("2026-10-11T12:00:00Z"), timeField: -1},
+		{name: "JSON without a time", line: `2026-10-11T12:00:00Z {"msg":"x"}`, want: at("2026-10-11T12:00:00Z"), timeField: -1},
+		{name: "logfmt without a time", line: `web-1 | 2026-10-11T12:00:00Z a=1 b=2`, want: at("2026-10-11T12:00:00Z"), timeField: -1},
+		{name: "the time of the entry wins", line: `2026-10-11T12:00:00Z {"time":"2026-10-11T13:00:00Z"}`, want: at("2026-10-11T13:00:00Z"), timeField: 0},
+		{name: "a time of the entry that cannot be read", line: `2026-10-11T12:00:00Z {"time":"yesterday"}`, want: at("2026-10-11T12:00:00Z"), timeField: -1},
+		{name: "a stamp without a zone is in Loc", line: `web | 2026-10-11 12:00:00,123 {"a":1}`, want: at("2026-10-11T09:00:00.123Z"), timeField: -1},
+		{name: "a stamp before the bar is the collector's text", line: `2026-10-11T12:00:00Z svc | {"a":1}`, timeField: -1},
+		{name: "no stamp", line: `web-1 | hello`, timeField: -1},
+		{name: "a plain line", line: `2026-10-11 12:00:00 hello`, timeField: -1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := Parser{Loc: moscow}
+			p.Parse([]byte(`{"time":"2000-01-01T00:00:00Z"}`)) // its time must not stay
+			e := p.Parse([]byte(tt.line))
+			if !e.Time.Equal(tt.want) || e.TimeField() != tt.timeField {
+				t.Errorf("Parse(%q): time %v, field %d; want %v, %d", tt.line, e.Time, e.TimeField(), tt.want, tt.timeField)
+			}
+		})
 	}
 }

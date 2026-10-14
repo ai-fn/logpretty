@@ -72,7 +72,8 @@ func TestAppendEntryFields(t *testing.T) {
 		{name: "the prefix of a collector stays", fields: []string{"a"}, line: `web-1 | {"level":"info","msg":"started","a":1}`, want: `web-1 | INFO  a=1`},
 		{name: "the text before the pairs stays", fields: []string{"a"}, line: `2026/10/11 12:00:00 level=info msg=x a=1`, want: `2026/10/11 12:00:00 INFO  a=1`},
 		{name: "a prefix alone is not what was asked for", fields: []string{"b"}, line: `web-1 | {"a":1}`},
-		{name: "the stamp of a collector stays", fields: []string{"a"}, line: `2026-10-11T12:00:00Z {"level":"info","a":1}`, want: `2026-10-11T12:00:00Z INFO  a=1`},
+		{name: "the time a collector wrote is the column", fields: []string{"a"}, line: `2026-10-11T12:00:00Z {"level":"info","a":1}`, want: `15:00:00.000 INFO  a=1`},
+		{name: "the time a collector wrote is the time asked for", fields: []string{"time"}, line: `[pod/web-1/app] 2026-10-11T12:00:00Z {"a":1}`, want: `[pod/web-1/app] 15:00:00.000`},
 		{name: "a pod and a stamp alone are not what was asked for", fields: []string{"b"}, line: `[pod/web-1/app] 2026-10-11T12:00:00Z {"a":1}`},
 
 		{name: "a plain line is not touched", fields: []string{"a"}, line: `hello a world`, want: `hello a world`},
@@ -113,7 +114,10 @@ func TestAppendEntryNoTime(t *testing.T) {
 		{name: "the time was all the entry had after its prefix", line: `svc | {"ts":1791720000}`},
 		{name: "the time and a message of spaces", line: `{"ts":1791720000,"msg":" "}`},
 		{name: "a message of spaces without a time is still an empty line", line: `{"msg":" "}`, want: "\n"},
-		{name: "the time a collector wrote is its prefix", line: `2026-10-11T12:00:00.123456789Z {"level":"error","msg":"boom"}`, want: "2026-10-11T12:00:00.123456789Z ERROR boom\n"},
+		{name: "the time a collector wrote is hidden too", line: `2026-10-11T12:00:00.123456789Z {"level":"error","msg":"boom"}`, want: "ERROR boom\n"},
+		{name: "the time a collector wrote before a plain line", line: "[pod/web-1/app] 2026-10-11T12:00:00Z \tat x", want: "[pod/web-1/app] \tat x\n"},
+		{name: "a plain line of a collector's time alone is still a line", line: "2026-10-11T12:00:00Z", want: "\n"},
+		{name: "a plain line of a collector's prefix and time", line: "web-1 | 2026-10-11T12:00:00Z", want: "web-1 |\n"},
 		{name: "a plain line is not touched", line: `2026-10-11 12:00:00 started`, want: "2026-10-11 12:00:00 started\n"},
 		{name: "an entry without fields is not touched", line: `{}`, want: "{}\n"},
 

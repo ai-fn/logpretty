@@ -230,10 +230,25 @@ func TestCondOnTime(t *testing.T) {
 			},
 		},
 		{
-			name: "the time a collector put in front is not the time of the entry",
+			name: "the time a collector put in front is the time of an entry without one",
 			loc:  time.UTC,
-			line: `2026-10-11T12:00:00Z {"msg":"x"}`,
-			want: map[string]bool{`time`: false, `time>=2000-01-01T00:00:00Z`: false, `time!=2026-10-11T12:00:00Z`: true},
+			line: `[pod/web-1/app] 2026-10-11T15:00:00+03:00 {"msg":"x"}`,
+			want: map[string]bool{
+				`time`: true, `time=2026-10-11T12:00:00Z`: true, `time>=2026-10-11T12:00:00Z`: true, `time<2026-10-11T12:00:00Z`: false,
+				`time!=2026-10-11T12:00:00Z`: false, `time~\+03:00$`: true, `time!~^2026`: false, `"time"`: false,
+			},
+		},
+		{
+			name: "the time of the entry wins over the one a collector put in front",
+			loc:  time.UTC,
+			line: `2026-10-11T12:00:00Z {"time":"2026-10-11T13:00:00Z","msg":"x"}`,
+			want: map[string]bool{`time=2026-10-11T13:00:00Z`: true, `time=2026-10-11T12:00:00Z`: false, `time~T13`: true, `time~T12`: false},
+		},
+		{
+			name: "a time a collector put in front without a zone, in the zone of the output",
+			loc:  moscow,
+			line: `web | 2026-10-11 12:00:00 {"msg":"x"}`,
+			want: map[string]bool{`time=2026-10-11T09:00:00Z`: true, `time~"^2026-10-11 12"`: true},
 		},
 		{
 			name: "a time that cannot be read is a field like any other",

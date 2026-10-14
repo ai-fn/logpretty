@@ -36,7 +36,8 @@ func (p *Parser) Parse(line []byte) *entry.Entry {
 	// Windows tools start a file with a byte order mark, which would hide the first brace or key.
 	start := bytes.TrimPrefix(line, []byte(byteOrderMark))
 	var body []byte
-	e.Collector, e.Source, e.Stamp, body = splitCollector(start)
+	var stampTime time.Time
+	e.Collector, e.Source, e.Stamp, body, stampTime = splitCollector(start)
 	e.Body = body
 	fields, prefix, split, ok := appendJSONLineFields(e.Fields, body)
 	format := entry.FormatJSON
@@ -52,17 +53,20 @@ func (p *Parser) Parse(line []byte) *entry.Entry {
 	}
 	// Kept for a plain line too: a rejected one may have grown the slice.
 	e.Fields = fields
-	if !ok {
-		return e
+	if ok {
+		e.Format = format
+		switch {
+		case split.ok:
+			stampTime = addCollector(e, start, body, prefix, split, p.Loc)
+		case len(prefix) > 0:
+			e.Prefix = prefix
+		}
+		assignRoles(e, p.Loc)
 	}
-	e.Format = format
-	switch {
-	case split.ok:
-		addCollector(e, start, body, prefix, split)
-	case len(prefix) > 0:
-		e.Prefix = prefix
+	// A stack trace has no time of its own, and the time a collector wrote is often the only one an entry has.
+	if e.TimeField() < 0 {
+		e.Time = stampTime
 	}
-	assignRoles(e, p.Loc)
 	return e
 }
 
@@ -74,7 +78,7 @@ func isIndented(line []byte) bool {
 
 // splitCollector splits off what kubectl logs --prefix --timestamps or docker compose logs -t wrote in front
 // of the line; the forms are strict, since a plain line has nothing else to vouch for them.
-func splitCollector(line []byte) (collector, source, stamp, body []byte) {
+func splitCollector(line []byte) (collector, source, stamp, body []byte, when time.Time) {
 	body = line
 	// The first bytes are tested here, so that most lines make no call at all.
 	if len(body) > 0 && body[0] == '[' {
@@ -87,11 +91,11 @@ func splitCollector(line []byte) (collector, source, stamp, body []byte) {
 		}
 	}
 	if len(body) >= 20 && body[10] == 'T' {
-		if n := stampLen(body); n > 0 {
-			stamp, body = body[:n:n], afterSeparator(body[n:])
+		if n, t := stampLen(body); n > 0 {
+			stamp, body, when = body[:n:n], afterSeparator(body[n:]), t
 		}
 	}
-	return collector, source, stamp, body[:len(body):len(body)]
+	return collector, source, stamp, body[:len(body):len(body)], when
 }
 
 // afterSeparator drops the one whitespace byte between what a collector wrote and the line; the ones after it are the line's.
@@ -165,33 +169,34 @@ func isAlnum(c byte) bool {
 	return isDigit(c) || 'a' <= c|0x20 && c|0x20 <= 'z'
 }
 
-// stampLen returns the length of the timestamp at the start of line, as kubectl and docker write it: RFC 3339
-// with "Z" or "±hh:mm", followed by a space or the end of the line; 0 otherwise.
-func stampLen(line []byte) int {
+// stampLen returns the length and the time of the timestamp at the start of line, as kubectl and docker write it:
+// RFC 3339 with "Z" or "±hh:mm", followed by a space or the end of the line; 0 otherwise.
+func stampLen(line []byte) (int, time.Time) {
 	// The caller tests the same first; this guards the indexing below.
 	if len(line) < 20 || line[10] != 'T' {
-		return 0
+		return 0, time.Time{}
 	}
 	n := bytes.IndexByte(line[:min(len(line), maxStamp+1)], ' ')
 	if n < 0 {
 		if len(line) > maxStamp {
-			return 0
+			return 0, time.Time{}
 		}
 		n = len(line)
 	}
 	// A date, a time and a zone take 20 bytes at the least.
 	if n < 20 {
-		return 0
+		return 0, time.Time{}
 	}
 	stamp := line[:n]
 	zoned := stamp[n-1] == 'Z' || (stamp[n-6] == '+' || stamp[n-6] == '-') && stamp[n-3] == ':'
 	if !zoned {
-		return 0
+		return 0, time.Time{}
 	}
-	if _, ok := parseDateTime(stamp, time.UTC); !ok {
-		return 0
+	t, ok := parseDateTime(stamp, time.UTC)
+	if !ok {
+		return 0, time.Time{}
 	}
-	return n
+	return n, t
 }
 
 // lenientPrefix is the text before a structured part, split as a log collector writes it.
@@ -223,9 +228,9 @@ func splitLenientPrefix(prefix []byte) lenientPrefix {
 	return split
 }
 
-// addCollector adds a vetted prefix, which stands in body past the strict forms, to what the collector wrote.
-// The collector's text runs from the start of the line to its last timestamp, or to the bar when no timestamp follows it.
-func addCollector(e *entry.Entry, start, body, prefix []byte, split lenientPrefix) {
+// addCollector adds a vetted prefix, which stands in body past the strict forms, to what the collector wrote, and returns
+// the time of its timestamp. The collector's text runs to the last timestamp, or to the bar when none follows it.
+func addCollector(e *entry.Entry, start, body, prefix []byte, split lenientPrefix, loc *time.Location) (stampTime time.Time) {
 	at := len(start) - len(body)
 	for isSpace(start[at]) {
 		at++
@@ -241,6 +246,11 @@ func addCollector(e *entry.Entry, start, body, prefix []byte, split lenientPrefi
 	e.Stamp = clipped(split.stamp)
 	body = afterSeparator(start[at+len(prefix):])
 	e.Body = body[:len(body):len(body)]
+	// Vetted by splitLenientPrefix; unlike a strict one, it may lack a zone and so be in loc.
+	if e.Stamp != nil {
+		stampTime, _ = parseDateTime(e.Stamp, loc)
+	}
+	return stampTime
 }
 
 // clipped returns b without spare capacity, so that an append cannot overwrite the line, or nil if it is empty.
