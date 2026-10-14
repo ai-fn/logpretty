@@ -243,6 +243,13 @@ func FuzzRender(f *testing.F) {
 	for _, seed := range []string{`{"msg":"a\tb","k\t":"c\td"}`, "aaaaaaaa=1 b=\"x\ty\"", "aaaaaaaaaa=1 bbbbbbbbbb=2 c=\"x\ty", "one\ttwo three a=1 b=2"} {
 		f.Add([]byte(seed), uint32(0))
 	}
+	// What a log collector wrote, with an empty line after it and before a frame of a stack trace.
+	for _, seed := range []string{
+		"web-1 | ", "web-1 |", "[pod/web-1/app] 2026-10-11T12:00:05Z \tat x", "[pod/a/b] 2026-10-11T12:00:05Z ",
+		`[pod/web-1/app] {"msg":"x"}`, "a\t| 2026-10-11T12:00:00Z\t{\"a\":1}", "a\t| {}",
+	} {
+		f.Add([]byte(seed), uint32(0))
+	}
 	f.Add([]byte("abc"), uint32(3<<20))
 
 	f.Fuzz(func(t *testing.T, data []byte, n uint32) {
@@ -261,7 +268,8 @@ func FuzzRender(f *testing.F) {
 
 		e := p.Parse(line)
 		plain := e.Format == entry.FormatPlain
-		structured, prefixTabs := !plain && len(e.Fields) > 0, bytes.Count(e.Prefix, []byte("\t"))
+		structured := !plain && len(e.Fields) > 0
+		prefixTabs := bytes.Count(e.Collector, []byte("\t")) + bytes.Count(e.Stamp, []byte("\t")) + bytes.Count(e.Prefix, []byte("\t"))
 		got := string(r.AppendEntry([]byte(">"), e))
 
 		fresh := Renderer{Loc: testLoc}
@@ -274,15 +282,35 @@ func FuzzRender(f *testing.F) {
 		if tabs := strings.Count(got, "\t"); structured && tabs != prefixTabs {
 			t.Fatalf("line %q is shown as %q with %d tabs, want the %d of its prefix", line, got, tabs, prefixTabs)
 		}
-		// A plain line is the line itself, made safe.
-		if want := referenceSafe(strings.TrimPrefix(string(line), "\ufeff")) + "\n"; plain && got[1:] != want {
+		// A plain line is the line itself, made safe, but the space after what a collector wrote when nothing follows it.
+		want := referenceSafe(strings.TrimPrefix(string(line), "\ufeff"))
+		if (e.Collector != nil || e.Stamp != nil) && len(e.Body) == 0 {
+			want = strings.TrimSuffix(want, " ")
+		}
+		if want += "\n"; plain && got[1:] != want {
 			t.Fatalf("plain line %q\n got %q\nwant %q", line, got[1:], want)
+		}
+		// An entry without fields is what the collector wrote and the rest of the line, one space apart.
+		if !plain && !structured {
+			want := referenceSafe(strings.TrimPrefix(string(line), "\ufeff"))
+			if e.Collector != nil || e.Stamp != nil {
+				parts := []string{}
+				for _, part := range [][]byte{e.Collector, e.Stamp, e.Body} {
+					if len(part) > 0 {
+						parts = append(parts, string(part))
+					}
+				}
+				want = referenceSafe(strings.Join(parts, " "))
+			}
+			if got[1:] != want+"\n" {
+				t.Fatalf("entry without fields %q\n got %q\nwant %q", line, got[1:], want+"\n")
+			}
 		}
 
 		cut := string(r.AppendTruncated(nil, line, dropped))
 		checkLine(t, "the truncated line", line, cut)
 		// A truncated line is the line itself, made safe, and the size that was dropped; size_test.go pins its format.
-		want := referenceSafe(strings.TrimPrefix(string(line), "\ufeff")) + "…[+" + string(appendSize(nil, dropped)) + "]\n"
+		want = referenceSafe(strings.TrimPrefix(string(line), "\ufeff")) + "…[+" + string(appendSize(nil, dropped)) + "]\n"
 		if cut != want {
 			t.Fatalf("truncated line %q\n got %q\nwant %q", line, cut, want)
 		}

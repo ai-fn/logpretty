@@ -214,7 +214,14 @@ func TestAppendEntryTheme(t *testing.T) {
 		{name: "each level has its style", theme: tags, line: `{"level":"trace"}`, want: `<l1>TRACE</>`},
 		{name: "the quotes of a key are inside its style", theme: tags, line: `{"a b":1}`, want: `<k>"a b"=</>1`},
 		{name: "a plain line has no style", theme: tags, line: `hello`, want: `hello`},
-		{name: "an empty object has no style", theme: tags, line: `svc | {}`, want: `svc | {}`},
+		{name: "an empty object has no style, what the collector wrote has", theme: tags, line: `svc | {}`, want: `<p>svc |</> {}`},
+		{name: "a plain line after a container name", theme: tags, line: `web-1 | Traceback`, want: `<p>web-1 |</> Traceback`},
+		{
+			name:  "a plain line after a pod name and a timestamp",
+			theme: tags,
+			line:  "[pod/web-1/app] 2026-10-11T12:00:00Z \tat x",
+			want:  "<p>[pod/web-1/app]</> <p>2026-10-11T12:00:00Z</> \tat x",
+		},
 		{
 			name:  "a part without a style is not reset",
 			theme: Theme{Time: "<t>", Reset: "</>"},

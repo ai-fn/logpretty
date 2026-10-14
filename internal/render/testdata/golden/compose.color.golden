@@ -1,6 +1,12 @@
 \e[2mweb-1    |\e[0m \e[2m12:00:00.000\e[0m \e[32mINFO\e[0m  started
-db-1     | 2026-10-11 12:00:00.123 UTC [1] LOG:  database system is ready to accept connections
+\e[2mdb-1     |\e[0m 2026-10-11 12:00:00.123 UTC [1] LOG:  database system is ready to accept connections
 \e[2mweb-1    |\e[0m \e[32mINFO\e[0m  ready  \e[2mport=\e[0m8080
-\e[2mworker-2 | 2026-10-11T12:00:00.123456789Z\e[0m \e[33mWARN\e[0m  slow
+\e[2mworker-2 |\e[0m \e[2m2026-10-11T12:00:00.123456789Z\e[0m \e[33mWARN\e[0m  slow
 web-1 exited with code 0
-web-1    | 
+\e[2mweb-1    |\e[0m
+\e[2mweb-1    |\e[0m \e[2m12:00:06.000\e[0m \e[31mERROR\e[0m request failed
+\e[2mweb-1    |\e[0m Traceback (most recent call last):
+\e[2mapi-1    |\e[0m \e[2m12:00:06.000\e[0m \e[32mINFO\e[0m  api ok
+\e[2mweb-1    |\e[0m   File "/app/views.py", line 12, in index
+\e[2mweb-1    |\e[0m     return render(request, template_name=name, context=ctx)
+\e[2mweb-1    |\e[0m ValueError: bad template

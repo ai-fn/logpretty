@@ -72,6 +72,8 @@ func TestAppendEntryFields(t *testing.T) {
 		{name: "the prefix of a collector stays", fields: []string{"a"}, line: `web-1 | {"level":"info","msg":"started","a":1}`, want: `web-1 | INFO  a=1`},
 		{name: "the text before the pairs stays", fields: []string{"a"}, line: `2026/10/11 12:00:00 level=info msg=x a=1`, want: `2026/10/11 12:00:00 INFO  a=1`},
 		{name: "a prefix alone is not what was asked for", fields: []string{"b"}, line: `web-1 | {"a":1}`},
+		{name: "the stamp of a collector stays", fields: []string{"a"}, line: `2026-10-11T12:00:00Z {"level":"info","a":1}`, want: `2026-10-11T12:00:00Z INFO  a=1`},
+		{name: "a pod and a stamp alone are not what was asked for", fields: []string{"b"}, line: `[pod/web-1/app] 2026-10-11T12:00:00Z {"a":1}`},
 
 		{name: "a plain line is not touched", fields: []string{"a"}, line: `hello a world`, want: `hello a world`},
 		{name: "an empty line is not touched", fields: []string{"a"}, line: ``, want: ``},

@@ -1,34 +1,77 @@
 line 1: json
   in: "2026-10-11T12:00:00.123456789Z {\"level\":\"info\",\"msg\":\"started\"}"
+  stamp: "2026-10-11T12:00:00.123456789Z"
   level: info
   time: -
   roles: time=- level=level msg=msg
-  prefix: "2026-10-11T12:00:00.123456789Z" (collector)
   fields:
     "level"=<string>"info"
     "msg"=<string>"started"
 line 2: logfmt
   in: "2026-10-11T12:00:01.000000000Z level=info msg=hello a=1"
+  stamp: "2026-10-11T12:00:01.000000000Z"
   level: info
   time: -
   roles: time=- level=level msg=msg
-  prefix: "2026-10-11T12:00:01.000000000Z" (collector)
   fields:
     "level"=<string>"info"
     "msg"=<string>"hello"
     "a"=<string>"1"
 line 3: plain
   in: "2026-10-11T12:00:02.500000000Z plain message"
+  stamp: "2026-10-11T12:00:02.500000000Z"
 line 4: json
   in: "2026-10-11T12:00:03.000000000Z {\"level\":\"error\",\"msg\":\"boom\"}"
+  stamp: "2026-10-11T12:00:03.000000000Z"
   level: error
   time: -
   roles: time=- level=level msg=msg
-  prefix: "2026-10-11T12:00:03.000000000Z" (collector)
   fields:
     "level"=<string>"error"
     "msg"=<string>"boom"
-line 5: plain
+line 5: json
   in: "[pod/web-1/app] {\"level\":\"info\",\"msg\":\"with --prefix\"}"
-line 6: plain
+  collector: "[pod/web-1/app]"
+  source: "pod/web-1/app"
+  level: info
+  time: -
+  roles: time=- level=level msg=msg
+  fields:
+    "level"=<string>"info"
+    "msg"=<string>"with --prefix"
+line 6: json
   in: "[pod/web-1/app] 2026-10-11T12:00:04.000000000Z {\"level\":\"info\",\"msg\":\"with --prefix and --timestamps\"}"
+  collector: "[pod/web-1/app]"
+  source: "pod/web-1/app"
+  stamp: "2026-10-11T12:00:04.000000000Z"
+  level: info
+  time: -
+  roles: time=- level=level msg=msg
+  fields:
+    "level"=<string>"info"
+    "msg"=<string>"with --prefix and --timestamps"
+line 7: plain
+  in: "[pod/web-1/app] 2026-10-11T12:00:05.000000000Z panic: runtime error: index out of range [5] with length 3"
+  collector: "[pod/web-1/app]"
+  source: "pod/web-1/app"
+  stamp: "2026-10-11T12:00:05.000000000Z"
+line 8: plain
+  in: "[pod/web-1/app] 2026-10-11T12:00:05.000000000Z "
+  collector: "[pod/web-1/app]"
+  source: "pod/web-1/app"
+  stamp: "2026-10-11T12:00:05.000000000Z"
+line 9: plain
+  in: "[pod/web-1/app] 2026-10-11T12:00:05.000000000Z goroutine 1 [running]:"
+  collector: "[pod/web-1/app]"
+  source: "pod/web-1/app"
+  stamp: "2026-10-11T12:00:05.000000000Z"
+line 10: plain
+  in: "[pod/web-1/app] 2026-10-11T12:00:05.000000000Z main.main()"
+  collector: "[pod/web-1/app]"
+  source: "pod/web-1/app"
+  stamp: "2026-10-11T12:00:05.000000000Z"
+line 11: plain
+  in: "[pod/web-1/app] 2026-10-11T12:00:05.000000000Z \t/app/main.go:12 +0x1d"
+  collector: "[pod/web-1/app]"
+  source: "pod/web-1/app"
+  stamp: "2026-10-11T12:00:05.000000000Z"

@@ -5,6 +5,16 @@ exec logpretty --utc --level error
 cmp stdout want_traceback
 ! stderr .
 
+# What kubectl logs --prefix --timestamps writes is read on every line, so a JSON line after it is an entry
+# and the plain lines of its stack trace follow it.
+stdin pod.log
+exec logpretty --utc
+cmp stdout want_pod
+stdin pod.log
+exec logpretty --utc --level error
+cmp stdout want_pod_error
+! stderr .
+
 -- traceback.log --
 {"time":"2026-10-11T12:00:00Z","level":"info","msg":"started"}
 {"time":"2026-10-11T12:00:01Z","level":"error","msg":"request failed"}
@@ -23,3 +33,22 @@ Traceback (most recent call last):
   File "/app/render.py", line 30, in render
     raise ValueError("bad template")
 ValueError: bad template
+-- pod.log --
+[pod/web-1/app] 2026-10-11T12:00:00.000000000Z {"time":"2026-10-11T12:00:00Z","level":"info","msg":"started"}
+[pod/web-1/app] 2026-10-11T12:00:01.000000000Z {"time":"2026-10-11T12:00:01Z","level":"error","msg":"panic"}
+[pod/web-1/app] 2026-10-11T12:00:01.000000000Z goroutine 1 [running]:
+[pod/web-1/app] 2026-10-11T12:00:01.000000000Z main.main()
+[pod/web-1/app] 2026-10-11T12:00:01.000000000Z 	/app/main.go:12 +0x1d
+[pod/web-1/app] {"time":"2026-10-11T12:00:02Z","level":"info","msg":"restarted"}
+-- want_pod --
+[pod/web-1/app] 2026-10-11T12:00:00.000000000Z 12:00:00.000 INFO  started
+[pod/web-1/app] 2026-10-11T12:00:01.000000000Z 12:00:01.000 ERROR panic
+[pod/web-1/app] 2026-10-11T12:00:01.000000000Z goroutine 1 [running]:
+[pod/web-1/app] 2026-10-11T12:00:01.000000000Z main.main()
+[pod/web-1/app] 2026-10-11T12:00:01.000000000Z 	/app/main.go:12 +0x1d
+[pod/web-1/app] 12:00:02.000 INFO  restarted
+-- want_pod_error --
+[pod/web-1/app] 2026-10-11T12:00:01.000000000Z 12:00:01.000 ERROR panic
+[pod/web-1/app] 2026-10-11T12:00:01.000000000Z goroutine 1 [running]:
+[pod/web-1/app] 2026-10-11T12:00:01.000000000Z main.main()
+[pod/web-1/app] 2026-10-11T12:00:01.000000000Z 	/app/main.go:12 +0x1d

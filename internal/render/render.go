@@ -29,24 +29,28 @@ type Renderer struct {
 	finder parse.Finder
 }
 
-// AppendEntry appends the entry as one line: prefix, time, level, message, then the other fields; a line without
-// fields is printed as it is, and an entry that Fields and NoTime leave empty adds nothing. dst must not share memory with e.
+// AppendEntry appends the entry as one line; a line without fields is printed as written, but for one space after what
+// a collector wrote, and an entry that Fields and NoTime leave empty adds nothing. dst must not share memory with e.
 func (r *Renderer) AppendEntry(dst []byte, e *entry.Entry) []byte {
 	if e.Format == entry.FormatPlain || len(e.Fields) == 0 {
-		return append(appendSafe(dst, trimByteOrderMark(e.Line)), '\n')
+		if e.Collector == nil && e.Stamp == nil {
+			return append(appendSafe(dst, trimByteOrderMark(e.Line)), '\n')
+		}
+		var sep string
+		dst, sep = r.appendCollector(dst, e)
+		if len(e.Body) > 0 {
+			dst = appendSafe(append(dst, sep...), e.Body)
+		}
+		return append(dst, '\n')
 	}
 	th, sel := &r.Theme, r.Fields
 	start := len(dst)
 	// The separator is written before a part, not after it, so that a part the entry lacks leaves no spaces behind.
-	sep := ""
+	dst, sep := r.appendCollector(dst, e)
 
-	// The prefix, like a plain line, keeps its tabs; only the parts built here write them out.
+	// The logger's own text, like a plain line, keeps its tabs; only the parts built here write them out.
 	if len(e.Prefix) > 0 {
-		style := ""
-		if e.CollectorPrefix {
-			style = th.Prefix
-		}
-		dst = th.end(appendSafe(append(dst, style...), e.Prefix), style)
+		dst = appendSafe(append(dst, sep...), e.Prefix)
 		sep = " "
 	}
 	hasTime := !e.Time.IsZero()
@@ -115,6 +119,19 @@ func (r *Renderer) AppendEntry(dst []byte, e *entry.Entry) []byte {
 		return dst[:start]
 	}
 	return append(dst, '\n')
+}
+
+// appendCollector appends, faint, what a log collector wrote in front of the line, and returns the separator
+// that the next part needs.
+func (r *Renderer) appendCollector(dst []byte, e *entry.Entry) ([]byte, string) {
+	th, sep := &r.Theme, ""
+	for _, part := range [...][]byte{e.Collector, e.Stamp} {
+		if len(part) > 0 {
+			dst = th.end(appendSafe(append(append(dst, sep...), th.Prefix...), part), th.Prefix)
+			sep = " "
+		}
+	}
+	return dst, sep
 }
 
 // appendSelected appends the fields of sel that the entry has, in the order of sel, and reports whether it had

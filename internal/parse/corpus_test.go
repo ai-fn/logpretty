@@ -16,6 +16,14 @@ import (
 
 func dumpEntry(b *strings.Builder, n int, line []byte, e *entry.Entry) {
 	fmt.Fprintf(b, "line %d: %s\n  in: %q\n", n, e.Format, line)
+	for _, part := range []struct {
+		name  string
+		value []byte
+	}{{"collector", e.Collector}, {"source", e.Source}, {"stamp", e.Stamp}} {
+		if len(part.value) > 0 {
+			fmt.Fprintf(b, "  %s: %q\n", part.name, part.value)
+		}
+	}
 	if e.Format == entry.FormatPlain {
 		return
 	}
@@ -33,11 +41,7 @@ func dumpEntry(b *strings.Builder, n int, line []byte, e *entry.Entry) {
 	}
 	fmt.Fprintf(b, "  roles: time=%s level=%s msg=%s\n", key(e.TimeField()), key(e.LevelField()), key(e.MsgField()))
 	if len(e.Prefix) > 0 {
-		fmt.Fprintf(b, "  prefix: %q", e.Prefix)
-		if e.CollectorPrefix {
-			b.WriteString(" (collector)")
-		}
-		b.WriteString("\n")
+		fmt.Fprintf(b, "  prefix: %q\n", e.Prefix)
 	}
 	b.WriteString("  fields:\n")
 	for _, f := range e.Fields {

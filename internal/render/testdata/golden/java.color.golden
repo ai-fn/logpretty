@@ -5,5 +5,5 @@ java.lang.NullPointerException: Cannot invoke "String.length()" because "s" is n
 	at com.example.Controller.get(Controller.java:17)
 Caused by: java.io.IOException: boom
 	... 12 more
-2026-10-11T12:00:02.123+03:00  INFO 1234 --- [           main] c.e.App                                  : Started App in 2.3 seconds
+\e[2m2026-10-11T12:00:02.123+03:00\e[0m  INFO 1234 --- [           main] c.e.App                                  : Started App in 2.3 seconds
 \e[2m09:00:03.123\e[0m \e[32mINFO\e[0m  Started  \e[2m@version=\e[0m1 \e[2mlogger_name=\e[0mc.e.App \e[2mthread_name=\e[0mmain \e[2mlevel_value=\e[0m20000

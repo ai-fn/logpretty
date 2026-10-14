@@ -4,3 +4,8 @@
 2026-10-11T12:00:03.000000000Z {"level":"error","msg":"boom"}
 [pod/web-1/app] {"level":"info","msg":"with --prefix"}
 [pod/web-1/app] 2026-10-11T12:00:04.000000000Z {"level":"info","msg":"with --prefix and --timestamps"}
+[pod/web-1/app] 2026-10-11T12:00:05.000000000Z panic: runtime error: index out of range [5] with length 3
+[pod/web-1/app] 2026-10-11T12:00:05.000000000Z 
+[pod/web-1/app] 2026-10-11T12:00:05.000000000Z goroutine 1 [running]:
+[pod/web-1/app] 2026-10-11T12:00:05.000000000Z main.main()
+[pod/web-1/app] 2026-10-11T12:00:05.000000000Z 	/app/main.go:12 +0x1d
