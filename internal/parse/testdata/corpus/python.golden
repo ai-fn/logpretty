@@ -38,3 +38,15 @@ line 7: plain
   in: "  File \"a.py\", line 1, in <module>"
 line 8: plain
   in: "ValueError: boom"
+line 9: plain
+  in: "Traceback (most recent call last):"
+line 10: plain
+  in: "  File \"/app/views.py\", line 12, in index"
+line 11: plain
+  in: "    return render(request, template_name=name, context=ctx)"
+line 12: plain
+  in: "  File \"/app/render.py\", line 30, in render"
+line 13: plain
+  in: "    raise ValueError(\"bad template\")"
+line 14: plain
+  in: "ValueError: bad template"

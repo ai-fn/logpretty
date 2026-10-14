@@ -1,0 +1,25 @@
+# Under a filter a stack trace goes the way of the entry before it, even a line of it that holds pairs:
+# an indented line is never logfmt.
+stdin traceback.log
+exec logpretty --utc --level error
+cmp stdout want_traceback
+! stderr .
+
+-- traceback.log --
+{"time":"2026-10-11T12:00:00Z","level":"info","msg":"started"}
+{"time":"2026-10-11T12:00:01Z","level":"error","msg":"request failed"}
+Traceback (most recent call last):
+  File "/app/views.py", line 12, in index
+    return render(request, template_name=name, context=ctx)
+  File "/app/render.py", line 30, in render
+    raise ValueError("bad template")
+ValueError: bad template
+{"time":"2026-10-11T12:00:02Z","level":"info","msg":"next"}
+-- want_traceback --
+12:00:01.000 ERROR request failed
+Traceback (most recent call last):
+  File "/app/views.py", line 12, in index
+    return render(request, template_name=name, context=ctx)
+  File "/app/render.py", line 30, in render
+    raise ValueError("bad template")
+ValueError: bad template

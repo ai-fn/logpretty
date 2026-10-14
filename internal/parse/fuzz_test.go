@@ -471,6 +471,10 @@ func referenceFormat(t *testing.T, body []byte) (format entry.Format, prefix str
 			return entry.FormatJSON, prefix, true
 		}
 	}
+	// Indented lines are frames of a stack trace, even when they hold pairs.
+	if bytes.HasPrefix(body, []byte(" ")) || bytes.HasPrefix(body, []byte("\t")) {
+		return entry.FormatPlain, "", false
+	}
 	if _, prefix, ok := referenceLogfmtFields(body); ok {
 		return entry.FormatLogfmt, prefix, referenceCollector(prefix)
 	}
@@ -490,7 +494,8 @@ func FuzzParse(f *testing.F) {
 		`svc | out 2026-10-11T12:00:00Z {"a":1}`, `svc | 2026-10-11T12:00:00Z INFO {"a":1}`, `[pod/web-1/app] {"a":1}`,
 		`svc | level=info msg=x`, `2026-10-11T12:00:01.000000000Z a=1 b=2`, `2026-10-11 12:00:00,123 a=1 b=2`, `| a=1 b=2`,
 		`svc-1  | 2026-10-11T12:00:00Z a=1 b=2`, `svc | out a=1 b=2`, `2026/10/11 12:00:01 INFO hello a=1 b=2`,
-		strings.Repeat("s", 63) + `| a=1 b=2`, strings.Repeat("s", 64) + `| a=1 b=2`,
+		strings.Repeat("s", 63) + `| a=1 b=2`, strings.Repeat("s", 64) + `| a=1 b=2`, "\tat x a=1 b=2", "  level=info msg=x",
+		"\ra=1 b=2", "\xef\xbb\xbf a=1 b=2", "\xef\xbb\xbf\ta=1 b=2", "\vx a=1 b=2", `Caused by: boom x=1 y=2`,
 	} {
 		f.Add([]byte(seed))
 	}
@@ -510,6 +515,9 @@ func FuzzParse(f *testing.F) {
 		if e.Format != wantFormat || string(e.Prefix) != wantPrefix || (wantPrefix == "") != (e.Prefix == nil) || e.CollectorPrefix != wantCollector {
 			t.Fatalf("Parse(%q): format %d with prefix %q (nil: %v, collector: %v), want format %d with prefix %q (collector: %v)",
 				line, e.Format, e.Prefix, e.Prefix == nil, e.CollectorPrefix, wantFormat, wantPrefix, wantCollector)
+		}
+		if e.Format == entry.FormatLogfmt && len(body) > 0 && (body[0] == ' ' || body[0] == '\t') {
+			t.Fatalf("Parse(%q): an indented line is logfmt", line)
 		}
 		switch e.Format {
 		case entry.FormatJSON:

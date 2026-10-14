@@ -31,7 +31,7 @@ func (p *Parser) Parse(line []byte) *entry.Entry {
 	fields, prefix, ok := appendJSONLineFields(e.Fields, body)
 	format := entry.FormatJSON
 	// Cheaper than the tokenizer for the plain lines that have no pair at all.
-	if !ok && bytes.IndexByte(body, '=') >= 0 {
+	if !ok && !isIndented(body) && bytes.IndexByte(body, '=') >= 0 {
 		fields, prefix, ok = appendLogfmtFields(fields, body)
 		format = entry.FormatLogfmt
 	}
@@ -47,6 +47,12 @@ func (p *Parser) Parse(line []byte) *entry.Entry {
 		(format == entry.FormatJSON || (len(prefix) <= maxJSONPrefix && isCollectorPrefix(prefix)))
 	assignRoles(e, p.Loc)
 	return e
+}
+
+// isIndented reports whether the line starts with a space or a tab. Such a line is a frame of a stack trace,
+// even when it holds key=value pairs, so it is never logfmt.
+func isIndented(line []byte) bool {
+	return len(line) > 0 && (line[0] == ' ' || line[0] == '\t')
 }
 
 // appendJSONLineFields appends the fields of a line that is a JSON object, alone or after the prefix of

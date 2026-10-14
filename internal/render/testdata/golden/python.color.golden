@@ -6,3 +6,9 @@
 Traceback (most recent call last):
   File "a.py", line 1, in <module>
 ValueError: boom
+Traceback (most recent call last):
+  File "/app/views.py", line 12, in index
+    return render(request, template_name=name, context=ctx)
+  File "/app/render.py", line 30, in render
+    raise ValueError("bad template")
+ValueError: bad template
