@@ -201,6 +201,15 @@ func TestAppendEntryWithoutLocationIsLocal(t *testing.T) {
 	}
 }
 
+// The key of a block has the style of a key, and its lines have none.
+func TestAppendEntryThemeOfABlock(t *testing.T) {
+	r := Renderer{Theme: tags, Loc: testLoc}
+	const line = `{"time":"2026-10-11T12:00:00Z","msg":"m","a":"x\ny"}`
+	if got, want := appended(&r, line), "<t>15:00:00.000</> m\n  <k>a:</>\n    x\n    y\n"; got != want {
+		t.Errorf("line %q\n got %q\nwant %q", line, got, want)
+	}
+}
+
 func TestAppendEntryTheme(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -360,25 +369,107 @@ func TestRenderDoesNotAllocate(t *testing.T) {
 		`time=2026-10-11T12:00:00Z level=info msg="request \"done\"" status=200 verbose`,
 		`2026/10/11 12:00:01 INFO hello a=1 b=2`,
 		`2026-10-11 12:00:00 INFO request done in 5ms`,
+		`{"level":"error","msg":"x","stacktrace":"main.run\n\t/app/main.go:30\r\n\nz","k":1,"exc":"a\nb"}`,
 		"\ufeffplain with \x1b and \xff",
 		``,
 	}
 	for _, theme := range []Theme{{}, tags, DefaultTheme()} {
-		// The zone is set: the first use of time.Local loads it, which allocates once.
-		r := Renderer{Theme: theme, Loc: testLoc}
-		dst := make([]byte, 0, 4096)
-		for _, line := range lines {
-			// The entry is parsed once, outside the measured function: the parser has its own allocation tests.
-			p := parse.Parser{Loc: testLoc}
-			e := p.Parse([]byte(line))
-			dst = r.AppendEntry(dst[:0], e) // grows the scratch space
-			if allocs := testing.AllocsPerRun(100, func() { dst = r.AppendEntry(dst[:0], e) }); allocs != 0 {
-				t.Errorf("AppendEntry allocates %v times for %q, want 0", allocs, line)
+		for _, r := range []Renderer{
+			// The zone is set: the first use of time.Local loads it, which allocates once.
+			{Theme: theme, Loc: testLoc},
+			{Theme: theme, Loc: testLoc, NoExpand: true},
+			{Theme: theme, Loc: testLoc, Fields: Select([]string{"stacktrace", "exc", "k"})},
+		} {
+			dst := make([]byte, 0, 4096)
+			for _, line := range lines {
+				// The entry is parsed once, outside the measured function: the parser has its own allocation tests.
+				p := parse.Parser{Loc: testLoc}
+				e := p.Parse([]byte(line))
+				dst = r.AppendEntry(dst[:0], e) // grows the scratch space
+				if allocs := testing.AllocsPerRun(100, func() { dst = r.AppendEntry(dst[:0], e) }); allocs != 0 {
+					t.Errorf("AppendEntry allocates %v times for %q, want 0", allocs, line)
+				}
+			}
+			line := []byte("a truncated line \x1b")
+			if allocs := testing.AllocsPerRun(100, func() { dst = r.AppendTruncated(dst[:0], line, 123456) }); allocs != 0 {
+				t.Errorf("AppendTruncated allocates %v times, want 0", allocs)
 			}
 		}
-		line := []byte("a truncated line \x1b")
-		if allocs := testing.AllocsPerRun(100, func() { dst = r.AppendTruncated(dst[:0], line, 123456) }); allocs != 0 {
-			t.Errorf("AppendTruncated allocates %v times, want 0", allocs)
-		}
+	}
+}
+
+func TestAppendEntryUnfolds(t *testing.T) {
+	const (
+		zap    = `{"level":"error","ts":1791720001.5,"caller":"db/pool.go:88","msg":"query failed","error":"context deadline exceeded","stacktrace":"main.run\n\t/app/main.go:30\nmain.main\n\t/app/main.go:12"}`
+		nested = `{"time":"2026-10-11T12:00:00Z","msg":"m","err":{"stack":"a\nb"}}`
+	)
+	tests := []struct {
+		name     string
+		line     string
+		fields   []string
+		noTime   bool
+		noExpand bool
+		want     string
+	}{
+		{
+			name: "zap stacktrace",
+			line: zap,
+			want: "15:00:01.500 ERROR query failed  caller=db/pool.go:88 error=\"context deadline exceeded\"\n" +
+				"  stacktrace:\n    main.run\n    \t/app/main.go:30\n    main.main\n    \t/app/main.go:12\n",
+		},
+		{
+			name: "python exc_info",
+			line: `{"message":"boom","exc_info":"Traceback (most recent call last):\n  File \"a.py\", line 1, in <module>\nValueError: x"}`,
+			want: "boom\n  exc_info:\n    Traceback (most recent call last):\n      File \"a.py\", line 1, in <module>\n    ValueError: x\n",
+		},
+		{name: "logfmt", line: `level=error msg=x stack="a\nb"`, want: "ERROR x\n  stack:\n    a\n    b\n"},
+		{name: "a carriage return and a line feed are one break", line: `{"msg":"m","a":"x\r\ny"}`, want: "m\n  a:\n    x\n    y\n"},
+		{name: "a line feed at the end alone stays in the line", line: `{"msg":"m","a":"x\n"}`, want: "m  a=x\\n\n"},
+		{name: "a line feed at the end is dropped", line: `{"msg":"m","a":"x\ny\n"}`, want: "m\n  a:\n    x\n    y\n"},
+		{name: "an empty line inside has no indent", line: `{"msg":"m","a":"x\n\ny"}`, want: "m\n  a:\n    x\n\n    y\n"},
+		{name: "control characters inside are written out", line: `{"msg":"m","a":"x\u001b[31m\ny\rz\u2028"}`, want: "m\n  a:\n    x\\x1b[31m\n    y\\rz\\u2028\n"},
+		{name: "a key in quotes", line: `{"msg":"m","a b":"x\ny"}`, want: "m\n  \"a b\":\n    x\n    y\n"},
+		{
+			name: "fields in their order, the others in the line",
+			line: `{"msg":"m","s1":"a\nb","k":1,"s2":"c\nd"}`,
+			want: "m  k=1\n  s1:\n    a\n    b\n  s2:\n    c\n    d\n",
+		},
+		{name: "the message stays in its column", line: `{"msg":"a\nb","k":1}`, want: "a\\nb  k=1\n"},
+		{name: "a nested value stays in its object", line: nested, want: "15:00:00.000 m  err={\"stack\":\"a\\nb\"}\n"},
+		{name: "a nested value chosen by its path", line: nested, fields: []string{"err.stack"}, want: "15:00:00.000\n  err.stack:\n    a\n    b\n"},
+		{name: "a backslash before n is no line feed", line: `{"msg":"m","a":"x\\ny"}`, want: "m  a=x\\ny\n"},
+		{name: "a number is never unfolded", line: "a=1 b=2", want: "a=1 b=2\n"},
+		{
+			name:   "an entry of nothing but a value to unfold, its time hidden",
+			line:   `{"time":"2026-10-11T12:00:00Z","stack":"a\nb"}`,
+			noTime: true,
+			want:   "\n  stack:\n    a\n    b\n",
+		},
+		{name: "not asked for, not unfolded", line: zap, fields: []string{"caller"}, want: "15:00:01.500 ERROR caller=db/pool.go:88\n"},
+		{
+			name:     "no-expand keeps one line",
+			line:     zap,
+			noExpand: true,
+			want:     "15:00:01.500 ERROR query failed  caller=db/pool.go:88 error=\"context deadline exceeded\" stacktrace=main.run\\n\\t/app/main.go:30\\nmain.main\\n\\t/app/main.go:12\n",
+		},
+		{name: "only line feeds", line: `{"msg":"m","a":"\n\n"}`, want: "m\n  a:\n\n\n"},
+		{name: "a carriage return in the middle is written out", line: `{"msg":"m","a":"x\ny\rz"}`, want: "m\n  a:\n    x\n    y\\rz\n"},
+		{name: "a carriage return at the end of the last line is written out", line: `{"msg":"m","a":"x\ny\r"}`, want: "m\n  a:\n    x\n    y\\r\n"},
+		{name: "a carriage return and a line feed at the end", line: `{"msg":"m","a":"x\ny\r\n"}`, want: "m\n  a:\n    x\n    y\n"},
+		{name: "an empty key", line: `{"msg":"m","":"x\ny"}`, want: "m\n  \"\":\n    x\n    y\n"},
+		{name: "a key that starts with a space", line: `{"msg":"m"," a":"x\ny"}`, want: "m\n  \" a\":\n    x\n    y\n"},
+		{name: "the block has no prefix of a collector", line: `web-1  | {"msg":"m","stack":"a\nb"}`, want: "web-1  | m\n  stack:\n    a\n    b\n"},
+		{name: "a bare logfmt word next to a block", line: `level=info bare stack="a\nb" k=1`, want: "INFO  bare k=1\n  stack:\n    a\n    b\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := Renderer{Loc: testLoc, NoTime: tt.noTime, NoExpand: tt.noExpand, Fields: Select(tt.fields)}
+			// Twice, so that no block of the first entry is left for the second.
+			for range 2 {
+				if got := appended(&r, tt.line); got != tt.want {
+					t.Fatalf("line %q\n got %q\nwant %q", tt.line, got, tt.want)
+				}
+			}
+		})
 	}
 }

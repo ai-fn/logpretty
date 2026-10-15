@@ -25,6 +25,9 @@ Flags:
                         is in the list. An entry with none of the fields is
                         not printed
       --no-time         leave the time out
+      --no-expand       keep a value with line breaks, such as a stack trace,
+                        in the line of its entry, written out as \n, instead
+                        of unfolding it under the entry
       --color WHEN      color the output: auto (only on a terminal, the
                         default), always or never
       --utc             show times in UTC instead of the local time zone

@@ -173,6 +173,75 @@ func FuzzFormat(f *testing.F) {
 	})
 }
 
+// checkEntry checks an entry with its blocks: safe lines, each one past the first empty or indented by two
+// spaces, so that none of them can pass for an entry.
+func checkEntry(t *testing.T, what string, line []byte, got string) {
+	t.Helper()
+	text, ok := strings.CutSuffix(got, "\n")
+	if !ok {
+		t.Fatalf("%s of %q is %q, want a newline at the end", what, line, got)
+	}
+	for i, l := range strings.Split(text, "\n") {
+		if i > 0 && l != "" && !strings.HasPrefix(l, "  ") {
+			t.Fatalf("%s of %q is %q: line %d %q is neither empty nor indented", what, line, got, i+1, l)
+		}
+		checkNothingUnsafe(t, what, string(line), l)
+	}
+}
+
+// checkBlocks checks the lines under an entry against the values with line breaks, decoded by the parser's own
+// escapes and split again here: a key line, then the lines of the value indented by four, empty ones as they are.
+// A "\r" goes with the "\n" that follows it and is written out anywhere else.
+func checkBlocks(t *testing.T, line []byte, e *entry.Entry, got string) {
+	t.Helper()
+	var keys []string
+	var blocks [][]string
+	for i, f := range e.Fields {
+		if i == e.TimeField() || i == e.LevelField() || i == e.MsgField() || f.Value.Kind != entry.KindString || !f.Value.Escaped {
+			continue
+		}
+		text := string(f.Value.AppendText(nil))
+		if j := strings.IndexByte(text, '\n'); j < 0 || j == len(text)-1 {
+			continue
+		}
+		if body, ok := strings.CutSuffix(text, "\n"); ok {
+			text = strings.TrimSuffix(body, "\r")
+		}
+		var lines []string
+		parts := strings.Split(text, "\n")
+		for k, l := range parts {
+			if k < len(parts)-1 {
+				l = strings.TrimSuffix(l, "\r")
+			}
+			if l != "" {
+				l = "    " + referenceSafe(l)
+			}
+			lines = append(lines, l)
+		}
+		keys = append(keys, "  "+string(appendKey(nil, f.Key))+":")
+		blocks = append(blocks, lines)
+	}
+	tail := strings.Split(strings.TrimSuffix(got, "\n"), "\n")[1:]
+	for k, lines := range blocks {
+		if len(tail) == 0 || tail[0] != keys[k] {
+			t.Fatalf("line %q is shown as %q, want the key line %q before the lines %q", line, got, keys[k], lines)
+		}
+		tail = tail[1:]
+		if len(tail) < len(lines) || !slices.Equal(tail[:len(lines)], lines) {
+			t.Fatalf("line %q is shown as %q, want the lines %q under its key", line, got, lines)
+		}
+		tail = tail[len(lines):]
+	}
+	if len(tail) != 0 {
+		t.Fatalf("line %q is shown as %q, want nothing past its blocks, but there is %q", line, got, tail)
+	}
+}
+
+func firstLine(s string) string {
+	first, _, _ := strings.Cut(s, "\n")
+	return first
+}
+
 // checkLine checks that a rendered line is one line of valid UTF-8 with nothing the terminal acts on.
 func checkLine(t *testing.T, what string, line []byte, got string) {
 	t.Helper()
@@ -250,6 +319,13 @@ func FuzzRender(f *testing.F) {
 	} {
 		f.Add([]byte(seed), uint32(0))
 	}
+	// Values to unfold: a stack trace with tabs and "\r\n", a break at the end, and one in logfmt.
+	for _, seed := range []string{
+		`{"msg":"m","stack":"a\n\tb\r\nc\n","k":"x\ny","n":"z\n"}`, `level=error msg=x stack="a\nb\u001b" k=1`,
+		`{"time":"2026-10-11T12:00:00Z","s":"\n\n"}`, `{"a b":"x\n\u2028y","\u001b":"p\nq"}`,
+	} {
+		f.Add([]byte(seed), uint32(0))
+	}
 	f.Add([]byte("abc"), uint32(3<<20))
 
 	f.Fuzz(func(t *testing.T, data []byte, n uint32) {
@@ -262,6 +338,7 @@ func FuzzRender(f *testing.F) {
 		for _, earlier := range []string{
 			`svc | {"time":"2026-10-11T12:00:00Z","level":"error","msg":"a \"long\" message\n","a":{"b":[1,2]},"c":"d\te"}`,
 			`a=1 ` + strings.Repeat("word ", 20),
+			`{"s":"a\nb","t":"c\nd"}`, // blocks of an earlier entry must not show in this one
 		} {
 			r.AppendEntry(nil, p.Parse([]byte(earlier)))
 		}
@@ -277,9 +354,12 @@ func FuzzRender(f *testing.F) {
 		if want := ">" + string(fresh.AppendEntry(nil, freshParser.Parse(line))); got != want {
 			t.Fatalf("line %q after other lines\n got %q\nwant %q", line, got, want)
 		}
-		checkLine(t, "the entry", line, got[1:])
+		checkEntry(t, "the entry", line, got[1:])
+		if structured {
+			checkBlocks(t, line, e, got[1:])
+		}
 		// The parts a structured line is built from write a tab out; only its prefix is printed as written.
-		if tabs := strings.Count(got, "\t"); structured && tabs != prefixTabs {
+		if tabs := strings.Count(firstLine(got), "\t"); structured && tabs != prefixTabs {
 			t.Fatalf("line %q is shown as %q with %d tabs, want the %d of its prefix", line, got, tabs, prefixTabs)
 		}
 		// A plain line is the line itself, made safe, with the time a collector wrote in the time column, but the
@@ -296,6 +376,14 @@ func FuzzRender(f *testing.F) {
 		}
 		if want := shownWithoutFields(line, e, false); !structured && got[1:] != want {
 			t.Fatalf("line without fields %q\n got %q\nwant %q", line, got[1:], want)
+		}
+
+		// Without unfolding an entry is one line, and an entry with nothing to unfold is shown the same either way.
+		flat := Renderer{Loc: testLoc, NoExpand: true}
+		one := string(flat.AppendEntry(nil, p.Parse(line)))
+		checkLine(t, "the entry without unfolding", line, one)
+		if !strings.Contains(got[1:len(got)-1], "\n") && one != got[1:] {
+			t.Fatalf("line %q with nothing to unfold\n got %q\nwant %q", line, one, got[1:])
 		}
 
 		cut := string(r.AppendTruncated(nil, line, dropped))
@@ -324,42 +412,51 @@ func FuzzRender(f *testing.F) {
 		}
 		for _, noTime := range []bool{false, true} {
 			for _, fields := range [][]string{nil, names} {
-				chosen := Renderer{Loc: testLoc, NoTime: noTime, Fields: Select(fields)}
-				chosen.AppendEntry(nil, p.Parse([]byte(`{"http":{"a":"other"},"status":"other","msg":"other"}`)))
-				part := string(chosen.AppendEntry([]byte(">"), p.Parse(line)))[1:]
-				what := fmt.Sprintf("the entry with fields %q and no time %v", fields, noTime)
+				for _, noExpand := range []bool{false, true} {
+					chosen := Renderer{Loc: testLoc, NoTime: noTime, NoExpand: noExpand, Fields: Select(fields)}
+					chosen.AppendEntry(nil, p.Parse([]byte(`{"http":{"a":"other"},"status":"other","msg":"other"}`)))
+					part := string(chosen.AppendEntry([]byte(">"), p.Parse(line)))[1:]
+					what := fmt.Sprintf("the entry with fields %q, no time %v and no expand %v", fields, noTime, noExpand)
 
-				switch {
-				case !structured:
-					// A line that is printed as it is stays so, whatever was chosen, but for a hidden time.
-					if want := shownWithoutFields(line, e, noTime); part != want {
-						t.Fatalf("%s of %q\n got %q\nwant %q", what, line, part, want)
+					switch {
+					case !structured:
+						// A line that is printed as it is stays so, whatever was chosen, but for a hidden time.
+						if want := shownWithoutFields(line, e, noTime); part != want {
+							t.Fatalf("%s of %q\n got %q\nwant %q", what, line, part, want)
+						}
+					case part != "" && noExpand:
+						checkLine(t, what, line, part)
+					case part != "":
+						// Nothing at all is how an entry with nothing left is shown; anything else is one safe line and blocks.
+						checkEntry(t, what, line, part)
 					}
-				case part != "":
-					// Nothing at all is how an entry with nothing left is shown; anything else is one safe line.
-					checkLine(t, what, line, part)
-					if tabs := strings.Count(part, "\t"); tabs != prefixTabs {
-						t.Fatalf("%s of %q is %q with %d tabs, want the %d of its prefix", what, line, part, tabs, prefixTabs)
+					if structured && part != "" {
+						if tabs := strings.Count(firstLine(part), "\t"); tabs != prefixTabs {
+							t.Fatalf("%s of %q is %q with %d tabs, want the %d of its prefix", what, line, part, tabs, prefixTabs)
+						}
 					}
-				}
-				if fields == nil && !noTime && part != got[1:] {
-					t.Fatalf("%s of %q\n got %q\nwant %q", what, line, part, got[1:])
-				}
-				// Without a time to hide, hiding it changes nothing.
-				if e.Time.IsZero() && noTime {
-					shown := Renderer{Loc: testLoc, Fields: Select(fields)}
-					if want := string(shown.AppendEntry(nil, p.Parse(line))); part != want {
-						t.Fatalf("%s of %q, which has no time\n got %q\nwant %q", what, line, part, want)
+					if fields == nil && !noTime && !noExpand && part != got[1:] {
+						t.Fatalf("%s of %q\n got %q\nwant %q", what, line, part, got[1:])
 					}
-				}
+					if fields == nil && !noTime && noExpand && part != one {
+						t.Fatalf("%s of %q\n got %q\nwant %q", what, line, part, one)
+					}
+					// Without a time to hide, hiding it changes nothing.
+					if e.Time.IsZero() && noTime {
+						shown := Renderer{Loc: testLoc, NoExpand: noExpand, Fields: Select(fields)}
+						if want := string(shown.AppendEntry(nil, p.Parse(line))); part != want {
+							t.Fatalf("%s of %q, which has no time\n got %q\nwant %q", what, line, part, want)
+						}
+					}
 
-				inColor := Renderer{Theme: DefaultTheme(), Loc: testLoc, NoTime: noTime, Fields: Select(fields)}
-				styled := string(inColor.AppendEntry(nil, p.Parse(line)))
-				if styled == "" && part == "" {
-					continue
-				}
-				if text := stripStyles(t, what+" in color", line, styled); text != part {
-					t.Fatalf("%s of %q in color, styles removed\n got %q\nwant %q", what, line, text, part)
+					inColor := Renderer{Theme: DefaultTheme(), Loc: testLoc, NoTime: noTime, NoExpand: noExpand, Fields: Select(fields)}
+					styled := string(inColor.AppendEntry(nil, p.Parse(line)))
+					if styled == "" && part == "" {
+						continue
+					}
+					if text := stripStyles(t, what+" in color", line, styled); text != part {
+						t.Fatalf("%s of %q in color, styles removed\n got %q\nwant %q", what, line, text, part)
+					}
 				}
 			}
 		}

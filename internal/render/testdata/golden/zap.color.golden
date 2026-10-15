@@ -1,5 +1,10 @@
 \e[2m12:00:00.123\e[0m \e[32mINFO\e[0m  server started  \e[2mcaller=\e[0mserver/main.go:42 \e[2maddr=\e[0m:8080
-\e[2m12:00:01.500\e[0m \e[31mERROR\e[0m query failed  \e[2mcaller=\e[0mdb/pool.go:88 \e[2merror=\e[0m"context deadline exceeded" \e[2mstacktrace=\e[0mmain.run\n\t/app/main.go:30\nmain.main\n\t/app/main.go:12
+\e[2m12:00:01.500\e[0m \e[31mERROR\e[0m query failed  \e[2mcaller=\e[0mdb/pool.go:88 \e[2merror=\e[0m"context deadline exceeded"
+  \e[2mstacktrace:\e[0m
+    main.run
+    	/app/main.go:30
+    main.main
+    	/app/main.go:12
 \e[2m12:00:02.000\e[0m \e[33mWARN\e[0m  slow request  \e[2mlogger=\e[0mapi.http \e[2mlatency=\e[0m1.5 \e[2mpath=\e[0m/api/v1/users
 \e[2m12:00:03.000\e[0m \e[1;31mFATAL\e[0m invariant broken  \e[2mcount=\e[0m0 \e[2mok=\e[0mfalse \e[2mextra=\e[0mnull
 2026-10-11T12:00:00.123Z	INFO	server/main.go:42	server started	{"addr": ":8080"}

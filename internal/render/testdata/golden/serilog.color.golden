@@ -1,5 +1,8 @@
 \e[2m12:00:00.123\e[0m \e[32mINFO\e[0m  User {Name} logged in  \e[2mName=\e[0mbob
 \e[2m12:00:01.123\e[0m \e[33mWARN\e[0m  Disk 91% full  \e[2m@i=\e[0m1a2b3c4d \e[2mUsed=\e[0m91
-\e[2m12:00:02.123\e[0m \e[31mERROR\e[0m Request failed  \e[2m@x=\e[0m"System.Exception: boom\n   at App.Run() in /app/Program.cs:line 12"
+\e[2m12:00:02.123\e[0m \e[31mERROR\e[0m Request failed
+  \e[2m@x:\e[0m
+    System.Exception: boom
+       at App.Run() in /app/Program.cs:line 12
 \e[2m12:00:03.123\e[0m \e[2mTRACE\e[0m Starting
 \e[2m12:00:04.123\e[0m \e[32mINFO\e[0m  \e[2mMessageTemplate=\e[0m"Hello {Name}" \e[2mRenderedMessage=\e[0m"Hello \"bob\"" \e[2mProperties=\e[0m{"Name":"bob"}

@@ -19,14 +19,15 @@ import (
 
 // Config is what the command line asks for.
 type Config struct {
-	MaxLine int // the longest line to keep, in bytes
-	UTC     bool
-	Color   term.ColorMode
-	Level   entry.Level   // the lowest level to show; LevelUnknown shows every entry
-	Where   []filter.Cond // conditions an entry must meet to be shown, all of them
-	Plain   filter.PlainMode
-	Fields  []string // the fields to show, as they were asked for; nil shows them all
-	NoTime  bool
+	MaxLine  int // the longest line to keep, in bytes
+	UTC      bool
+	Color    term.ColorMode
+	Level    entry.Level   // the lowest level to show; LevelUnknown shows every entry
+	Where    []filter.Cond // conditions an entry must meet to be shown, all of them
+	Plain    filter.PlainMode
+	Fields   []string // the fields to show, as they were asked for; nil shows them all
+	NoTime   bool
+	NoExpand bool // keep a value with line breaks, such as a stack trace, in the line of its entry
 }
 
 // ErrHelp is what Parse returns when the arguments ask for the help; it is a request, not a failure.
@@ -60,6 +61,9 @@ Flags:
                         is in the list. An entry with none of the fields is
                         not printed
       --no-time         leave the time out
+      --no-expand       keep a value with line breaks, such as a stack trace,
+                        in the line of its entry, written out as \n, instead
+                        of unfolding it under the entry
       --color WHEN      color the output: auto (only on a terminal, the
                         default), always or never
       --utc             show times in UTC instead of the local time zone
@@ -177,6 +181,7 @@ func newFlagSet(f *flags) *flag.FlagSet {
 		return err
 	})
 	fs.BoolVar(&f.NoTime, "no-time", f.NoTime, "")
+	fs.BoolVar(&f.NoExpand, "no-expand", f.NoExpand, "")
 	fs.Func("where", "", func(s string) error {
 		f.exprs = append(f.exprs, s)
 		return nil

@@ -1,5 +1,8 @@
 \e[2m12:00:00.123\e[0m \e[32mINFO\e[0m  started  \e[2mname=\e[0mapp
-\e[2m12:00:01.123\e[0m \e[31mERROR\e[0m failed  \e[2mname=\e[0mapp \e[2mexc_info=\e[0m"Traceback (most recent call last):\n  File \"a.py\", line 1"
+\e[2m12:00:01.123\e[0m \e[31mERROR\e[0m failed  \e[2mname=\e[0mapp
+  \e[2mexc_info:\e[0m
+    Traceback (most recent call last):
+      File "a.py", line 1
 2026-10-11 12:00:02,123 - app - INFO - started
 2026-10-11 12:00:03.123 | INFO     | app:main:10 - started
 \e[2m12:00:04.123\e[0m [info     ] user logged in                 [app] \e[2muser_id=\e[0m5 \e[2mip=\e[0m1.2.3.4

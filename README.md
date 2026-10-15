@@ -275,6 +275,7 @@ logpretty --color=always --where 'user_id=42' --where 'time>=2026-10-11T12:00:00
 | `--plain MODE` | What to do with the lines that are not entries, such as a stack trace: `follow` (the default) shows every line when nothing is filtered, and under `--level` or `--where` a line only after an entry that is shown, of the same container or pod when the lines carry its name (`docker compose logs`, `kubectl logs --prefix`); `show` shows them all, and `hide` hides them all, filter or not |
 | `--fields LIST` | Show only these fields, in this order: names separated by commas, as in `latency,http.status`. The time and the level are shown anyway; so is the message, in its usual place, if `msg` is in the list. An entry with none of the fields is not printed, while the plain lines after it still are |
 | `--no-time` | Leave the time out |
+| `--no-expand` | Keep a value with line breaks, such as a stack trace, in the line of its entry, written out as `\n`, instead of unfolding it under the entry |
 | `--color WHEN` | When to color the output: `auto` (on a terminal, the default), `always` or `never`. `always` also beats `NO_COLOR` |
 | `--utc` | Show times in UTC instead of the local time zone |
 | `--max-line SIZE` | Longest line to keep: a number of bytes, or one with `K`, `M` or `G` for KiB, MiB or GiB (default `1M`) |
