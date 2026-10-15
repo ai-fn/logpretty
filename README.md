@@ -20,8 +20,9 @@
 ---
 
 `logpretty` reads a log stream from stdin and prints it in a readable form. It detects the
-format of **every line** on its own (JSON, then logfmt, then plain text), so mixed streams
-from `kubectl` and `docker compose` work without flags. Output is streamed: it is flushed
+format of **every line** on its own (JSON, then logfmt, then plain text; a line that starts with a
+space or a tab, as a frame of a stack trace does, is never logfmt), so mixed streams from
+`kubectl` and `docker compose` work without flags. Output is streamed: it is flushed
 whenever the next read would block, so `kubectl logs -f` shows lines as they arrive.
 
 ```bash
@@ -41,7 +42,10 @@ kubectl logs -f pod | logpretty --level warn --where 'user_id=42' --fields msg,l
 | Exit codes: `0` success, `1` read/write error, `2` invalid arguments, `130`/`143` on SIGINT/SIGTERM | Available |
 | Graceful stop: on SIGINT or SIGTERM the complete lines already read are written out before exit | Available |
 | Quiet exit when the reader of stdout leaves early, as in `logpretty \| head` | Available |
-| Per-line format detection: JSON, logfmt, plain text; JSON after the prefix of `kubectl logs --timestamps` or `docker compose logs` | Available |
+| Per-line format detection: JSON, logfmt, plain text; JSON after the prefix of `kubectl logs --prefix --timestamps` or `docker compose logs -t` | Available |
+| Log collectors: the prefix of `kubectl logs --prefix` and `docker compose logs` is read on every line; their timestamp is the time column | Available |
+| Stack traces stay with their error when containers write at once: under a filter a plain line follows the entry of its own container or pod | Available |
+| A value with line breaks, such as the `stacktrace` of zap or the `exc_info` of Python, is unfolded under its entry; `--no-expand` keeps it in the line | Available |
 | Readable output: `time LEVEL message  key=value …`, fields in their original order, nested objects as compact JSON | Available |
 | Times in the local zone, or in UTC with `--utc` | Available |
 | Safe output: control characters from logs never reach the terminal raw | Available |
@@ -96,7 +100,8 @@ make build          # produces bin/logpretty
 ## Usage
 
 Pipe any log stream into `logpretty`. Each line is rendered by its own format, and a line that is
-not structured is printed as it is, apart from control characters:
+not structured is printed as it is, apart from control characters and the prefix of a log collector
+(see [Stack traces and containers](#stack-traces-and-containers)):
 
 ```console
 $ cat app.log
@@ -248,6 +253,60 @@ the line as it is written, so a single quote is no quote there and a quote insid
 as they are. A pipe of Windows PowerShell 5.1 also turns the characters outside ASCII into `?`,
 which `cmd /c "logpretty < app.log"` does not.
 
+### Stack traces and containers
+
+`docker compose logs -t` and `kubectl logs --prefix --timestamps` put the name of the container and
+a timestamp in front of every line, the plain lines of a stack trace too. `logpretty` reads them on
+every line: the name is shown faint, and the timestamp is the time column of a line that has no time
+of its own. The traceback below stays with its error although `api-1` writes in between. Under a
+filter, a plain line goes the way of the last entry of its own container or pod. If the line carries
+no name, or its container has no entry yet, it goes the way of the entry before it:
+
+```console
+$ cat compose.log
+web-1  | 2026-10-11T12:00:00.123456789Z {"level":"error","msg":"request failed","user_id":42}
+web-1  | 2026-10-11T12:00:00.123456789Z Traceback (most recent call last):
+api-1  | 2026-10-11T12:00:00.200000000Z {"level":"info","msg":"health ok"}
+web-1  | 2026-10-11T12:00:00.123456789Z   File "/app/views.py", line 12, in index
+api-1  | 2026-10-11T12:00:00.300000000Z GET /health 200
+web-1  | 2026-10-11T12:00:00.123456789Z ValueError: bad template
+$ logpretty --utc --level error < compose.log
+web-1  | 12:00:00.123 ERROR request failed  user_id=42
+web-1  | 12:00:00.123 Traceback (most recent call last):
+web-1  | 12:00:00.123   File "/app/views.py", line 12, in index
+web-1  | 12:00:00.123 ValueError: bad template
+```
+
+`kubectl logs --prefix` writes `[pod/NAME/CONTAINER]` instead of `NAME |` and works the same way; the
+whole bracket is shown faint, as in `[pod/web-1/app] 12:00:01.000 ERROR panic`. On a plain line, only
+`NAME |`, `[pod/NAME/CONTAINER]` and an RFC 3339 timestamp with a zone count as the prefix of a
+collector, so a line that merely looks like one, such as `INFO | started`, is shown faint and nothing
+more, unless entries of that name have been seen.
+
+A value with a line break before its last byte, such as the stack trace that zap keeps in `stacktrace`
+or Python logging in `exc_info`, is shown under its entry, indented, so that no line of it can pass
+for an entry. `--no-expand` keeps it in the line of the entry, written out as `\n`:
+
+```console
+$ cat zap.log
+{"level":"error","ts":1791720001.5,"caller":"db/pool.go:88","msg":"query failed","error":"context deadline exceeded","stacktrace":"main.run\n\t/app/main.go:30\nmain.main\n\t/app/main.go:12"}
+$ logpretty --utc < zap.log
+12:00:01.500 ERROR query failed  caller=db/pool.go:88 error="context deadline exceeded"
+  stacktrace:
+    main.run
+    	/app/main.go:30
+    main.main
+    	/app/main.go:12
+$ logpretty --utc --no-expand < zap.log
+12:00:01.500 ERROR query failed  caller=db/pool.go:88 error="context deadline exceeded" stacktrace=main.run\n\t/app/main.go:30\nmain.main\n\t/app/main.go:12
+```
+
+The message of an entry and the values inside objects stay in the line; a nested value is unfolded
+if `--fields` names it, as in `--fields err.stack`.
+
+The lines under an entry carry no name of a container, so `grep web-1` finds the line of the entry
+only: use `--no-expand` to get one line for each entry.
+
 ### Recipes
 
 ```bash
@@ -257,6 +316,12 @@ kubectl logs -f deploy/api | logpretty --level warn
 # kubectl --timestamps and docker compose put a prefix before each line; logpretty reads past it
 kubectl logs -f deploy/api --timestamps | logpretty --where 'http.status>=500'
 docker compose logs -f | logpretty --where 'msg~timeout' --fields msg,latency
+
+# every pod with a label, with its name and timestamp: warnings and above, with their stack traces
+kubectl logs -f -l app=web --prefix --timestamps | logpretty --level warn
+
+# one line for each entry, for grep and wc
+docker compose logs -t | logpretty --no-expand | grep web-1
 
 # a file that is still being written: errors and above, without the lines that are not entries
 tail -f app.log | logpretty --level error --plain hide
@@ -322,9 +387,9 @@ internal/app/         # the pipeline: read, parse, render, write
 internal/cli/         # reads the command line into a config; the text of --help
 internal/linereader/  # reads lines of any length and truncates at a limit
 internal/entry/       # parsed form of a log line: fields, level
-internal/parse/       # tells JSON, logfmt and plain lines apart, finds time, level and message
+internal/parse/       # tells JSON, logfmt and plain lines apart, finds time, level, message and the prefix of a log collector
 internal/filter/      # decides which lines are shown: --level, the expressions of --where, the plain lines of --plain
-internal/render/      # formats an entry as a line of text (--fields, --no-time) and keeps control characters out of the terminal
+internal/render/      # formats an entry as a line of text, with values that have line breaks unfolded under it (--fields, --no-time, --no-expand), and keeps control characters out of the terminal
 internal/term/        # decides whether to color the output: the --color mode, the terminal, NO_COLOR
 internal/golden/      # test helper: compares output with golden files
 testdata/script/      # end-to-end scenarios run against the real binary (testscript)
