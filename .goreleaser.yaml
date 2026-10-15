@@ -59,6 +59,8 @@ changelog:
       order: 4
   filters:
     exclude:
+      # GitFlow merge commits are noise in the notes
+      - '^Merge '
       - '^test'
       - '^ci'
       - '^chore'
