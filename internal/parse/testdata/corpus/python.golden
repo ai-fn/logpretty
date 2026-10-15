@@ -25,10 +25,11 @@ line 4: plain
   in: "2026-10-11 12:00:03.123 | INFO     | app:main:10 - started"
 line 5: logfmt
   in: "2026-10-11T12:00:04.123456Z [info     ] user logged in                 [app] user_id=5 ip=1.2.3.4"
+  stamp: "2026-10-11T12:00:04.123456Z"
   level: unknown
-  time: -
+  time: 2026-10-11T12:00:04.123456Z
   roles: time=- level=- msg=-
-  prefix: "2026-10-11T12:00:04.123456Z [info     ] user logged in                 [app]"
+  prefix: "[info     ] user logged in                 [app]"
   fields:
     "user_id"=<string>"5"
     "ip"=<string>"1.2.3.4"

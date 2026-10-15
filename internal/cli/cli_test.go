@@ -85,6 +85,8 @@ func TestParse(t *testing.T) {
 		},
 		{name: "no-time", args: []string{"--no-time"}, want: Config{MaxLine: linereader.DefaultMaxLine, NoTime: true}},
 		{name: "no-time turned off", args: []string{"-no-time", "--no-time=false"}, want: defaults},
+		{name: "no-expand", args: []string{"--no-expand"}, want: Config{MaxLine: linereader.DefaultMaxLine, NoExpand: true}},
+		{name: "no-expand turned off", args: []string{"--no-expand", "--no-expand=false"}, want: defaults},
 		{name: "double dash ends the flags", args: []string{"--"}, want: defaults},
 		{name: "max-line with a unit", args: []string{"--max-line", "64K"}, want: Config{MaxLine: 64 << 10}},
 		{name: "max-line with a unit spelled out", args: []string{"--max-line=2MiB"}, want: Config{MaxLine: 2 << 20}},
