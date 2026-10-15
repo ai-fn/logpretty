@@ -119,6 +119,9 @@ func trimLeftJSONSpace(b []byte) []byte {
 	return b
 }
 
+// spaces are the bytes isSpace accepts.
+const spaces = " \t\n\r"
+
 // isSpace reports the four bytes JSON calls whitespace. logfmt tokens are split on the same ones.
 func isSpace(c byte) bool {
 	return c == ' ' || c == '\t' || c == '\n' || c == '\r'

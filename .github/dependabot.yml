@@ -4,6 +4,8 @@ updates:
   # actions are pinned to commit SHAs; this keeps the pins moving to new releases
   - package-ecosystem: github-actions
     directory: /
+    # main takes only releases; this file is read from main, so it applies after the next release
+    target-branch: develop
     schedule:
       interval: weekly
     commit-message:

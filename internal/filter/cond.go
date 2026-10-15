@@ -123,11 +123,15 @@ func (c *Cond) match(e *entry.Entry, f *Filter) bool {
 			return c.re.MatchString(e.Level.String()) == (c.op == opMatch)
 		}
 		return holds(c.op, cmp.Compare(e.Level, c.level))
-	case c.role == roleTime && e.TimeField() >= 0:
+	case c.role == roleTime && !e.Time.IsZero():
 		if typed {
 			return holds(c.op, e.Time.Compare(c.when))
 		}
-		return c.matchValue(e.Fields[e.TimeField()].Value, f)
+		if i := e.TimeField(); i >= 0 {
+			return c.matchValue(e.Fields[i].Value, f)
+		}
+		// The time a collector wrote, as it wrote it.
+		return c.matchValue(entry.Value{Raw: e.Stamp, Kind: entry.KindString}, f)
 	case c.role == roleMsg && e.MsgField() >= 0:
 		return c.matchValue(e.Fields[e.MsgField()].Value, f)
 	case typed && (c.role == roleLevel || c.role == roleTime):

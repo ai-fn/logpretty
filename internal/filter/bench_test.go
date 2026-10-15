@@ -53,3 +53,58 @@ func BenchmarkKeep(b *testing.B) {
 		})
 	}
 }
+
+// Two containers with a stack trace in the middle, decided under --level error. The unnamed stream takes the
+// general rule, so the two rows are not one workload.
+func BenchmarkKeepSources(b *testing.B) {
+	streams := []struct {
+		name  string
+		lines []string
+		named bool   // the lines carry a source
+		want  []bool // what the filter decides on each of them
+	}{
+		{name: "with-sources", named: true, want: []bool{true, true, false, true, false, true}, lines: []string{
+			`web-1  | {"level":"error","msg":"request failed"}`,
+			"web-1  | Traceback (most recent call last):",
+			`api-1  | {"level":"info","msg":"request done"}`,
+			`web-1  |   File "/app/views.py", line 12, in index`,
+			"api-1  | GET /health 200",
+			"web-1  | ValueError: bad template",
+		}},
+		{name: "without-sources", want: []bool{true, true, false, false, false, false}, lines: []string{
+			`{"level":"error","msg":"request failed"}`,
+			"Traceback (most recent call last):",
+			`{"level":"info","msg":"request done"}`,
+			`  File "/app/views.py", line 12, in index`,
+			"GET /health 200",
+			"ValueError: bad template",
+		}},
+	}
+	for _, tt := range streams {
+		b.Run(tt.name, func(b *testing.B) {
+			// One parser for each line: a parser gives out the same entry again.
+			entries := make([]*entry.Entry, len(tt.lines))
+			for i, line := range tt.lines {
+				p := &parse.Parser{Loc: time.UTC}
+				entries[i] = p.Parse([]byte(line))
+			}
+			f := Filter{MinLevel: entry.LevelError}
+			for _, e := range entries { // remembers the sources once
+				f.Keep(e)
+			}
+			// A parser that stopped reading the container name would leave this row on the general path.
+			for i, e := range entries {
+				if got := f.Keep(e); (len(e.Source) > 0) != tt.named || got != tt.want[i] {
+					b.Fatalf("line %q: source %q, kept %v; want a source: %v, kept %v", tt.lines[i], e.Source, got, tt.named, tt.want[i])
+				}
+			}
+			b.ReportAllocs()
+
+			for b.Loop() {
+				for _, e := range entries {
+					f.Keep(e)
+				}
+			}
+		})
+	}
+}

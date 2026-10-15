@@ -1,6 +1,7 @@
 package filter
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -20,7 +21,7 @@ func kept(f *Filter, lines ...string) []string {
 	for _, line := range lines {
 		keep := false
 		if strings.HasPrefix(line, cut) {
-			keep = f.KeepPlain()
+			keep = f.KeepPlain(nil)
 		} else {
 			// Clipped, so that a read past the end of the line panics instead of finding spare capacity.
 			keep = f.Keep(p.Parse(slices.Clip([]byte(line))))
@@ -254,7 +255,7 @@ func TestPlainModeString(t *testing.T) {
 
 func TestZeroFilterKeepsEverything(t *testing.T) {
 	var f Filter
-	if !f.KeepPlain() || !f.Keep(&entry.Entry{}) || !f.Keep(&entry.Entry{Format: entry.FormatJSON}) || !f.KeepPlain() {
+	if !f.KeepPlain(nil) || !f.Keep(&entry.Entry{}) || !f.Keep(&entry.Entry{Format: entry.FormatJSON}) || !f.KeepPlain(nil) {
 		t.Error("the zero Filter hides a line")
 	}
 	if f.Plain != PlainFollow {
@@ -267,12 +268,110 @@ func TestKeepDoesNotAllocate(t *testing.T) {
 	f := Filter{MinLevel: entry.LevelWarn}
 	e := p.Parse([]byte(`level=warn msg=slow`))
 	plain := &entry.Entry{Line: []byte("text")}
+	// The sources are remembered once, before the runs: a new one costs its name.
+	sourced := &entry.Entry{Format: entry.FormatJSON, Level: entry.LevelError, Source: []byte("web-1")}
+	trace := &entry.Entry{Line: []byte("web-1 | at x"), Source: []byte("web-1")}
+	f.Keep(sourced)
 
 	if allocs := testing.AllocsPerRun(100, func() {
 		f.Keep(e)
 		f.Keep(plain)
-		f.KeepPlain()
+		f.KeepPlain(nil)
+		f.Keep(sourced)
+		f.Keep(trace)
+		f.KeepPlain([]byte("web-1"))
+		f.KeepPlain([]byte("unknown"))
 	}); allocs != 0 {
 		t.Errorf("Keep allocates %v times per call, want 0", allocs)
+	}
+}
+
+func TestKeepPlainLinesFollowTheEntryOfTheirSource(t *testing.T) {
+	const (
+		webFail = `web-1  | {"level":"error","msg":"failed"}`
+		apiInfo = `api-1  | {"level":"info","msg":"ok"}`
+		apiFail = `api-1  | {"level":"error","msg":"down"}`
+		info    = `{"level":"info","msg":"started"}`
+		fail    = `{"level":"error","msg":"failed"}`
+	)
+
+	tests := []struct {
+		name  string
+		lines []string
+		want  []string
+	}{
+		{
+			name:  "a stack trace of one container among the lines of another",
+			lines: []string{webFail, "web-1  | Traceback:", apiInfo, `web-1  |   File "x.py"`, "api-1  | note", "web-1  | ValueError"},
+			want:  []string{webFail, "web-1  | Traceback:", `web-1  |   File "x.py"`, "web-1  | ValueError"},
+		},
+		{
+			name: "pods with timestamps",
+			lines: []string{
+				`[pod/web-1/app] 2026-10-11T12:00:00Z {"level":"error","msg":"panic"}`,
+				`[pod/api-1/app] 2026-10-11T12:00:00Z {"level":"info","msg":"ok"}`,
+				"[pod/web-1/app] 2026-10-11T12:00:00Z \tat main.go:12",
+				"[pod/api-1/app] 2026-10-11T12:00:00Z \tat api.go:3",
+			},
+			want: []string{`[pod/web-1/app] 2026-10-11T12:00:00Z {"level":"error","msg":"panic"}`, "[pod/web-1/app] 2026-10-11T12:00:00Z \tat main.go:12"},
+		},
+		{
+			// INFO and id are not containers: with no entries of their own they change nothing.
+			name:  "a source without entries goes the way of the entry before",
+			lines: []string{fail, "INFO | boom", "id | name", info, "INFO | boom", "1 | foo"},
+			want:  []string{fail, "INFO | boom", "id | name"},
+		},
+		{
+			name:  "a line without a source goes the way of the entry before",
+			lines: []string{webFail, apiInfo, "no source", apiFail, "no source either"},
+			want:  []string{webFail, apiFail, "no source either"},
+		},
+		{
+			name:  "a cut line has no source",
+			lines: []string{webFail, apiInfo, cut + "web-1  | long"},
+			want:  []string{webFail},
+		},
+		{
+			name:  "an entry of a source decides for it again",
+			lines: []string{webFail, "web-1  | a", `web-1  | {"level":"info","msg":"x"}`, "web-1  | b", webFail, "web-1  | c"},
+			want:  []string{webFail, "web-1  | a", webFail, "web-1  | c"},
+		},
+		{
+			name:  "plain lines of a source before its first entry",
+			lines: []string{"web-1  | banner", webFail, "web-1  | after"},
+			want:  []string{webFail, "web-1  | after"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := Filter{MinLevel: entry.LevelError}
+			if got := kept(&f, tt.lines...); !slices.Equal(got, tt.want) {
+				t.Errorf("kept\n %q\nwant\n %q", got, tt.want)
+			}
+		})
+	}
+
+	// show and hide do not look at the source.
+	lines := []string{webFail, apiInfo, "web-1  | a", "api-1  | b"}
+	for mode, want := range map[PlainMode][]string{PlainShow: {webFail, "web-1  | a", "api-1  | b"}, PlainHide: {webFail}} {
+		f := Filter{MinLevel: entry.LevelError, Plain: mode}
+		if got := kept(&f, lines...); !slices.Equal(got, want) {
+			t.Errorf("%v: kept\n %q\nwant\n %q", mode, got, want)
+		}
+	}
+}
+
+// A stream with a new name on every line cannot grow the memory: sources past the limit go the general way.
+func TestKeepRemembersALimitedNumberOfSources(t *testing.T) {
+	lines := make([]string, 0, maxSources+4)
+	for i := range maxSources {
+		lines = append(lines, fmt.Sprintf(`s%d | {"level":"error","msg":"x"}`, i))
+	}
+	over := fmt.Sprintf(`s%d | {"level":"error","msg":"x"}`, maxSources)
+	lines = append(lines, over, `s0 | {"level":"info","msg":"x"}`, fmt.Sprintf("s%d | past the limit", maxSources), "s1 | remembered")
+	f := Filter{MinLevel: entry.LevelError}
+	got := kept(&f, lines...)
+	if want := append(slices.Clone(lines[:maxSources+1]), "s1 | remembered"); !slices.Equal(got, want) {
+		t.Errorf("kept the last lines %q, want %q", got[max(0, len(got)-3):], want[len(want)-3:])
 	}
 }

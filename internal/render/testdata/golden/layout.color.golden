@@ -13,4 +13,4 @@ only a message
 \e[2ma=\e[0m1 \e[2mb=\e[0m2
 plain line that stays as it is
 	indented with a tab
-web-1  | {}
+\e[2mweb-1  |\e[0m {}

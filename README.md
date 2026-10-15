@@ -20,8 +20,9 @@
 ---
 
 `logpretty` reads a log stream from stdin and prints it in a readable form. It detects the
-format of **every line** on its own (JSON, then logfmt, then plain text), so mixed streams
-from `kubectl` and `docker compose` work without flags. Output is streamed: it is flushed
+format of **every line** on its own (JSON, then logfmt, then plain text; a line that starts with a
+space or a tab, as a frame of a stack trace does, is never logfmt), so mixed streams from
+`kubectl` and `docker compose` work without flags. Output is streamed: it is flushed
 whenever the next read would block, so `kubectl logs -f` shows lines as they arrive.
 
 ```bash
@@ -41,7 +42,10 @@ kubectl logs -f pod | logpretty --level warn --where 'user_id=42' --fields msg,l
 | Exit codes: `0` success, `1` read/write error, `2` invalid arguments, `130`/`143` on SIGINT/SIGTERM | Available |
 | Graceful stop: on SIGINT or SIGTERM the complete lines already read are written out before exit | Available |
 | Quiet exit when the reader of stdout leaves early, as in `logpretty \| head` | Available |
-| Per-line format detection: JSON, logfmt, plain text; JSON after the prefix of `kubectl logs --timestamps` or `docker compose logs` | Available |
+| Per-line format detection: JSON, logfmt, plain text; JSON after the prefix of `kubectl logs --prefix --timestamps` or `docker compose logs -t` | Available |
+| Log collectors: the prefix of `kubectl logs --prefix` and `docker compose logs` is read on every line; their timestamp is the time column | Available |
+| Stack traces stay with their error when containers write at once: under a filter a plain line follows the entry of its own container or pod | Available |
+| A value with line breaks, such as the `stacktrace` of zap or the `exc_info` of Python, is unfolded under its entry; `--no-expand` keeps it in the line | Available |
 | Readable output: `time LEVEL message  key=value …`, fields in their original order, nested objects as compact JSON | Available |
 | Times in the local zone, or in UTC with `--utc` | Available |
 | Safe output: control characters from logs never reach the terminal raw | Available |
@@ -96,7 +100,8 @@ make build          # produces bin/logpretty
 ## Usage
 
 Pipe any log stream into `logpretty`. Each line is rendered by its own format, and a line that is
-not structured is printed as it is, apart from control characters:
+not structured is printed as it is, apart from control characters and the prefix of a log collector
+(see [Stack traces and containers](#stack-traces-and-containers)):
 
 ```console
 $ cat app.log
@@ -169,9 +174,10 @@ entry. The spaces around the operator may be left out:
   inside the object `db`; arrays are not looked into. `msg`, `level` and `time` stand for the
   message, the level and the time of the entry, whatever key the log keeps them under:
   `level>=warn` compares by severity and `time>=2026-10-11T12:00:02Z` by the moment. A time without
-  a zone is local, or UTC with `--utc`; the timestamp a collector puts in front of a line is not
-  the time of the entry. A key in double quotes, as in `"level"=3`, is the top-level field of that
-  very name: it stands for nothing else and does not look into objects.
+  a zone is local, or UTC with `--utc`; the timestamp `kubectl logs --timestamps` or
+  `docker compose logs -t` puts in front of a line is the time of an entry without one.
+  A key in double quotes, as in `"level"=3`, is the top-level field of that very name: it stands
+  for nothing else and does not look into objects.
 - **Quotes.** A value with a space goes in double quotes, inside the quotes of the shell:
   `--where 'msg="slow request"'`. Inside the double quotes `\"` is a quote and `\\` a backslash;
   any other backslash stays, so `msg~"\d+ ms"` works. An empty value is written `""`. Without
@@ -247,6 +253,60 @@ the line as it is written, so a single quote is no quote there and a quote insid
 as they are. A pipe of Windows PowerShell 5.1 also turns the characters outside ASCII into `?`,
 which `cmd /c "logpretty < app.log"` does not.
 
+### Stack traces and containers
+
+`docker compose logs -t` and `kubectl logs --prefix --timestamps` put the name of the container and
+a timestamp in front of every line, the plain lines of a stack trace too. `logpretty` reads them on
+every line: the name is shown faint, and the timestamp is the time column of a line that has no time
+of its own. The traceback below stays with its error although `api-1` writes in between. Under a
+filter, a plain line goes the way of the last entry of its own container or pod. If the line carries
+no name, or its container has no entry yet, it goes the way of the entry before it:
+
+```console
+$ cat compose.log
+web-1  | 2026-10-11T12:00:00.123456789Z {"level":"error","msg":"request failed","user_id":42}
+web-1  | 2026-10-11T12:00:00.123456789Z Traceback (most recent call last):
+api-1  | 2026-10-11T12:00:00.200000000Z {"level":"info","msg":"health ok"}
+web-1  | 2026-10-11T12:00:00.123456789Z   File "/app/views.py", line 12, in index
+api-1  | 2026-10-11T12:00:00.300000000Z GET /health 200
+web-1  | 2026-10-11T12:00:00.123456789Z ValueError: bad template
+$ logpretty --utc --level error < compose.log
+web-1  | 12:00:00.123 ERROR request failed  user_id=42
+web-1  | 12:00:00.123 Traceback (most recent call last):
+web-1  | 12:00:00.123   File "/app/views.py", line 12, in index
+web-1  | 12:00:00.123 ValueError: bad template
+```
+
+`kubectl logs --prefix` writes `[pod/NAME/CONTAINER]` instead of `NAME |` and works the same way; the
+whole bracket is shown faint, as in `[pod/web-1/app] 12:00:01.000 ERROR panic`. On a plain line, only
+`NAME |`, `[pod/NAME/CONTAINER]` and an RFC 3339 timestamp with a zone count as the prefix of a
+collector, so a line that merely looks like one, such as `INFO | started`, is shown faint and nothing
+more, unless entries of that name have been seen.
+
+A value with a line break before its last byte, such as the stack trace that zap keeps in `stacktrace`
+or Python logging in `exc_info`, is shown under its entry, indented, so that no line of it can pass
+for an entry. `--no-expand` keeps it in the line of the entry, written out as `\n`:
+
+```console
+$ cat zap.log
+{"level":"error","ts":1791720001.5,"caller":"db/pool.go:88","msg":"query failed","error":"context deadline exceeded","stacktrace":"main.run\n\t/app/main.go:30\nmain.main\n\t/app/main.go:12"}
+$ logpretty --utc < zap.log
+12:00:01.500 ERROR query failed  caller=db/pool.go:88 error="context deadline exceeded"
+  stacktrace:
+    main.run
+    	/app/main.go:30
+    main.main
+    	/app/main.go:12
+$ logpretty --utc --no-expand < zap.log
+12:00:01.500 ERROR query failed  caller=db/pool.go:88 error="context deadline exceeded" stacktrace=main.run\n\t/app/main.go:30\nmain.main\n\t/app/main.go:12
+```
+
+The message of an entry and the values inside objects stay in the line; a nested value is unfolded
+if `--fields` names it, as in `--fields err.stack`.
+
+The lines under an entry carry no name of a container, so `grep web-1` finds the line of the entry
+only: use `--no-expand` to get one line for each entry.
+
 ### Recipes
 
 ```bash
@@ -256,6 +316,12 @@ kubectl logs -f deploy/api | logpretty --level warn
 # kubectl --timestamps and docker compose put a prefix before each line; logpretty reads past it
 kubectl logs -f deploy/api --timestamps | logpretty --where 'http.status>=500'
 docker compose logs -f | logpretty --where 'msg~timeout' --fields msg,latency
+
+# every pod with a label, with its name and timestamp: warnings and above, with their stack traces
+kubectl logs -f -l app=web --prefix --timestamps | logpretty --level warn
+
+# one line for each entry, for grep and wc
+docker compose logs -t | logpretty --no-expand | grep web-1
 
 # a file that is still being written: errors and above, without the lines that are not entries
 tail -f app.log | logpretty --level error --plain hide
@@ -271,9 +337,10 @@ logpretty --color=always --where 'user_id=42' --where 'time>=2026-10-11T12:00:00
 |---|---|
 | `--level LEVEL` | Show the entries of this level or above: `trace`, `debug`, `info`, `warn`, `error` or `fatal`. An entry without a level is hidden, and by default so are the plain lines after a hidden entry (see `--plain`) |
 | `--where EXPR` | Show the entries that meet the expression: `key`, or `key OP value` with `=`, `!=`, `>`, `>=`, `<`, `<=`, `~` (a regular expression) or `!~`. Given twice, it asks for both. By default the plain lines after a hidden entry are hidden too (see `--plain`). The expressions are described under [Filtering](#filtering) |
-| `--plain MODE` | What to do with the lines that are not entries, such as a stack trace: `follow` (the default) shows every line when nothing is filtered, and under `--level` or `--where` a line only after an entry that is shown; `show` shows them all, and `hide` hides them all, filter or not |
+| `--plain MODE` | What to do with the lines that are not entries, such as a stack trace: `follow` (the default) shows every line when nothing is filtered, and under `--level` or `--where` a line only after an entry that is shown, of the same container or pod when the lines carry its name (`docker compose logs`, `kubectl logs --prefix`); `show` shows them all, and `hide` hides them all, filter or not |
 | `--fields LIST` | Show only these fields, in this order: names separated by commas, as in `latency,http.status`. The time and the level are shown anyway; so is the message, in its usual place, if `msg` is in the list. An entry with none of the fields is not printed, while the plain lines after it still are |
 | `--no-time` | Leave the time out |
+| `--no-expand` | Keep a value with line breaks, such as a stack trace, in the line of its entry, written out as `\n`, instead of unfolding it under the entry |
 | `--color WHEN` | When to color the output: `auto` (on a terminal, the default), `always` or `never`. `always` also beats `NO_COLOR` |
 | `--utc` | Show times in UTC instead of the local time zone |
 | `--max-line SIZE` | Longest line to keep: a number of bytes, or one with `K`, `M` or `G` for KiB, MiB or GiB (default `1M`) |
@@ -289,9 +356,15 @@ colors in the `auto` mode; use `--color=always` there.
 
 Requires Go 1.26+, [golangci-lint](https://golangci-lint.run) v2 and `make`. CI runs the tests
 on Linux, macOS and Windows, golangci-lint, `go mod tidy`, [govulncheck](https://go.dev/doc/security/vuln/)
-and a check of the GoReleaser config on every pull request and every push to `main`. A tag such as
-`v0.1.0` starts the release: the archives are built by GoReleaser and published with their
-checksums.
+and a check of the GoReleaser config on every pull request and every push to `main`, `develop`
+and the `feature/`, `release/` and `hotfix/` branches. A tag such as `v0.1.0` starts the release:
+the archives are built by GoReleaser and published with their checksums. A tag such as
+`v0.2.0-rc.1` publishes a prerelease and leaves the Homebrew cask as it is.
+
+The branches follow [GitFlow](https://nvie.com/posts/a-successful-git-branching-model/): work goes
+into `feature/…` branches off `develop`; a release is prepared on `release/vX.Y.Z`, tried as
+`vX.Y.Z-rc.N`, then merged into `main`, where every merge commit is a tagged release. An urgent fix
+goes into a `hotfix/vX.Y.Z` branch off `main` and is merged into both `main` and `develop`.
 
 | Command | Description |
 |---|---|
@@ -314,9 +387,9 @@ internal/app/         # the pipeline: read, parse, render, write
 internal/cli/         # reads the command line into a config; the text of --help
 internal/linereader/  # reads lines of any length and truncates at a limit
 internal/entry/       # parsed form of a log line: fields, level
-internal/parse/       # tells JSON, logfmt and plain lines apart, finds time, level and message
+internal/parse/       # tells JSON, logfmt and plain lines apart, finds time, level, message and the prefix of a log collector
 internal/filter/      # decides which lines are shown: --level, the expressions of --where, the plain lines of --plain
-internal/render/      # formats an entry as a line of text (--fields, --no-time) and keeps control characters out of the terminal
+internal/render/      # formats an entry as a line of text, with values that have line breaks unfolded under it (--fields, --no-time, --no-expand), and keeps control characters out of the terminal
 internal/term/        # decides whether to color the output: the --color mode, the terminal, NO_COLOR
 internal/golden/      # test helper: compares output with golden files
 testdata/script/      # end-to-end scenarios run against the real binary (testscript)
@@ -329,7 +402,8 @@ Makefile              # build, test, lint, fuzz, bench, vuln, snapshot, demo
 
 ## Contributing
 
-Bug reports and pull requests are welcome. Run `make check` before opening a pull request.
+Bug reports and pull requests are welcome. Open a pull request against `develop`, and run
+`make check` before you do.
 
 ## License
 

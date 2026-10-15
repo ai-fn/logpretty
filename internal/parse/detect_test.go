@@ -13,8 +13,8 @@ import (
 // describe renders everything Parse found, so that two entries can be compared and a difference read.
 func describe(t *testing.T, e *entry.Entry) string {
 	t.Helper()
-	return fmt.Sprintf("format %d, prefix %q (collector: %v), fields %+v, roles %+v",
-		e.Format, e.Prefix, e.CollectorPrefix, pairsOf(e.Fields), rolesOf(t, e))
+	return fmt.Sprintf("format %d, collector %q (source %q), stamp %q, prefix %q, fields %+v, roles %+v",
+		e.Format, e.Collector, e.Source, e.Stamp, e.Prefix, pairsOf(e.Fields), rolesOf(t, e))
 }
 
 func TestParse(t *testing.T) {
@@ -22,13 +22,14 @@ func TestParse(t *testing.T) {
 	num := func(key, raw string) pair { return pair{key, raw, entry.KindNumber, false} }
 
 	tests := []struct {
-		name       string
-		line       string
-		format     entry.Format
-		wantPrefix string
-		// A logfmt prefix is a collector's own only if it looks like one; the prefix of JSON always does.
-		collector bool
-		want      []pair
+		name          string
+		line          string
+		format        entry.Format
+		wantCollector string
+		wantSource    string
+		wantStamp     string
+		wantPrefix    string // the logger's own text before logfmt pairs
+		want          []pair
 	}{
 		{name: "JSON", line: `{"a":1,"b":"x"}`, format: entry.FormatJSON, want: []pair{num("a", "1"), str("b", "x")}},
 		{name: "JSON in whitespace", line: " \t{\"a\":1} \r", format: entry.FormatJSON, want: []pair{num("a", "1")}},
@@ -63,52 +64,50 @@ func TestParse(t *testing.T) {
 			want:       []pair{str("a", "1"), str("b", "2")},
 		},
 		{
-			name:       "logfmt after a container name",
-			line:       `svc | level=info msg=x`,
-			format:     entry.FormatLogfmt,
-			wantPrefix: `svc |`,
-			collector:  true,
-			want:       []pair{str("level", "info"), str("msg", "x")},
+			name:          "logfmt after a container name",
+			line:          `svc | level=info msg=x`,
+			format:        entry.FormatLogfmt,
+			wantCollector: `svc |`,
+			wantSource:    `svc`,
+			want:          []pair{str("level", "info"), str("msg", "x")},
 		},
 		{
-			name:       "logfmt after a timestamp",
-			line:       `2026-10-11T12:00:01.000000000Z level=info msg=hello a=1`,
-			format:     entry.FormatLogfmt,
-			wantPrefix: `2026-10-11T12:00:01.000000000Z`,
-			collector:  true,
-			want:       []pair{str("level", "info"), str("msg", "hello"), str("a", "1")},
+			name:      "logfmt after a timestamp",
+			line:      `2026-10-11T12:00:01.000000000Z level=info msg=hello a=1`,
+			format:    entry.FormatLogfmt,
+			wantStamp: `2026-10-11T12:00:01.000000000Z`,
+			want:      []pair{str("level", "info"), str("msg", "hello"), str("a", "1")},
 		},
 		{
-			name:       "logfmt after a timestamp with a space in it",
-			line:       `2026-10-11 12:00:00,123 a=1 b=2`,
-			format:     entry.FormatLogfmt,
-			wantPrefix: `2026-10-11 12:00:00,123`,
-			collector:  true,
-			want:       []pair{str("a", "1"), str("b", "2")},
+			name:      "logfmt after a timestamp with a space in it",
+			line:      `2026-10-11 12:00:00,123 a=1 b=2`,
+			format:    entry.FormatLogfmt,
+			wantStamp: `2026-10-11 12:00:00,123`,
+			want:      []pair{str("a", "1"), str("b", "2")},
 		},
 		{
-			name:       "logfmt after a container name and a timestamp",
-			line:       `svc-1  | 2026-10-11T12:00:00Z a=1 b=2`,
-			format:     entry.FormatLogfmt,
-			wantPrefix: `svc-1  | 2026-10-11T12:00:00Z`,
-			collector:  true,
-			want:       []pair{str("a", "1"), str("b", "2")},
+			name:          "logfmt after a container name and a timestamp",
+			line:          `svc-1  | 2026-10-11T12:00:00Z a=1 b=2`,
+			format:        entry.FormatLogfmt,
+			wantCollector: `svc-1  |`,
+			wantSource:    `svc-1`,
+			wantStamp:     `2026-10-11T12:00:00Z`,
+			want:          []pair{str("a", "1"), str("b", "2")},
 		},
 		{
-			name:       "logfmt after a bar alone",
-			line:       `| a=1 b=2`,
-			format:     entry.FormatLogfmt,
-			wantPrefix: `|`,
-			collector:  true,
-			want:       []pair{str("a", "1"), str("b", "2")},
+			name:          "logfmt after a bar alone",
+			line:          `| a=1 b=2`,
+			format:        entry.FormatLogfmt,
+			wantCollector: `|`,
+			want:          []pair{str("a", "1"), str("b", "2")},
 		},
 		{
-			name:       "logfmt after a prefix of 64 bytes",
-			line:       strings.Repeat("s", 63) + `| a=1 b=2`,
-			format:     entry.FormatLogfmt,
-			wantPrefix: strings.Repeat("s", 63) + `|`,
-			collector:  true,
-			want:       []pair{str("a", "1"), str("b", "2")},
+			name:          "logfmt after a prefix of 64 bytes",
+			line:          strings.Repeat("s", 63) + `| a=1 b=2`,
+			format:        entry.FormatLogfmt,
+			wantCollector: strings.Repeat("s", 63) + `|`,
+			wantSource:    strings.Repeat("s", 63),
+			want:          []pair{str("a", "1"), str("b", "2")},
 		},
 		{
 			name:       "logfmt after a prefix of 65 bytes",
@@ -118,11 +117,13 @@ func TestParse(t *testing.T) {
 			want:       []pair{str("a", "1"), str("b", "2")},
 		},
 		{
-			name:       "logfmt after a word between the bar and the pairs",
-			line:       `svc | out a=1 b=2`,
-			format:     entry.FormatLogfmt,
-			wantPrefix: `svc | out`,
-			want:       []pair{str("a", "1"), str("b", "2")},
+			name:          "logfmt after a word between the bar and the pairs",
+			line:          `svc | out a=1 b=2`,
+			format:        entry.FormatLogfmt,
+			wantCollector: `svc |`,
+			wantSource:    `svc`,
+			wantPrefix:    `out`,
+			want:          []pair{str("a", "1"), str("b", "2")},
 		},
 		{
 			name:       "logfmt after a log of the logger itself",
@@ -132,26 +133,28 @@ func TestParse(t *testing.T) {
 			want:       []pair{str("a", "1"), str("b", "2")},
 		},
 		{
-			name:       "logfmt after a tab behind the bar",
-			line:       "svc |\t2026-10-11T12:00:00Z a=1 b=2",
-			format:     entry.FormatLogfmt,
-			wantPrefix: "svc |\t2026-10-11T12:00:00Z",
-			collector:  true,
-			want:       []pair{str("a", "1"), str("b", "2")},
+			name:          "logfmt after a tab behind the bar",
+			line:          "svc |\t2026-10-11T12:00:00Z a=1 b=2",
+			format:        entry.FormatLogfmt,
+			wantCollector: `svc |`,
+			wantSource:    `svc`,
+			wantStamp:     `2026-10-11T12:00:00Z`,
+			want:          []pair{str("a", "1"), str("b", "2")},
 		},
 		{
-			name:       "logfmt with a collector prefix after a byte order mark",
-			line:       "\ufeffsvc | a=1 b=2",
-			format:     entry.FormatLogfmt,
-			wantPrefix: `svc |`,
-			collector:  true,
-			want:       []pair{str("a", "1"), str("b", "2")},
+			name:          "logfmt with a collector prefix after a byte order mark",
+			line:          "\ufeffsvc | a=1 b=2",
+			format:        entry.FormatLogfmt,
+			wantCollector: `svc |`,
+			wantSource:    `svc`,
+			want:          []pair{str("a", "1"), str("b", "2")},
 		},
 		{
 			name:       "logfmt after a timestamp and more text, as structlog writes it",
 			line:       `2026-10-11T12:00:04.123456Z [info     ] user logged in [app] user_id=5 ip=1.2.3.4`,
 			format:     entry.FormatLogfmt,
-			wantPrefix: `2026-10-11T12:00:04.123456Z [info     ] user logged in [app]`,
+			wantStamp:  `2026-10-11T12:00:04.123456Z`,
+			wantPrefix: `[info     ] user logged in [app]`,
 			want:       []pair{str("user_id", "5"), str("ip", "1.2.3.4")},
 		},
 		{
@@ -167,102 +170,147 @@ func TestParse(t *testing.T) {
 		{name: "one pair in a sentence", line: `Starting server on port=8080`},
 
 		{
-			name:       "JSON after a timestamp",
-			line:       `2026-10-11T12:00:00.123456789Z {"a":1}`,
-			format:     entry.FormatJSON,
-			wantPrefix: `2026-10-11T12:00:00.123456789Z`,
-			want:       []pair{num("a", "1")},
+			name:      "JSON after a timestamp",
+			line:      `2026-10-11T12:00:00.123456789Z {"a":1}`,
+			format:    entry.FormatJSON,
+			wantStamp: `2026-10-11T12:00:00.123456789Z`,
+			want:      []pair{num("a", "1")},
 		},
 		{
-			name:       "JSON after a timestamp with a space before its offset",
-			line:       `2026-10-11 12:00:00 +0000 {"a":1}`,
-			format:     entry.FormatJSON,
-			wantPrefix: `2026-10-11 12:00:00 +0000`,
-			want:       []pair{num("a", "1")},
+			name:      "JSON after a timestamp with a space before its offset",
+			line:      `2026-10-11 12:00:00 +0000 {"a":1}`,
+			format:    entry.FormatJSON,
+			wantStamp: `2026-10-11 12:00:00 +0000`,
+			want:      []pair{num("a", "1")},
 		},
 		{
-			name:       "JSON after a container name and a timestamp with a space before its offset",
-			line:       `web | 2026-10-11 12:00:00 +0300 {"a":1}`,
-			format:     entry.FormatJSON,
-			wantPrefix: `web | 2026-10-11 12:00:00 +0300`,
-			want:       []pair{num("a", "1")},
+			name:          "JSON after a container name and a timestamp with a space before its offset",
+			line:          `web | 2026-10-11 12:00:00 +0300 {"a":1}`,
+			format:        entry.FormatJSON,
+			wantCollector: `web |`,
+			wantSource:    `web`,
+			wantStamp:     `2026-10-11 12:00:00 +0300`,
+			want:          []pair{num("a", "1")},
 		},
 		{
-			name:       "JSON after a timestamp with a space in it",
-			line:       `2026-10-11 12:00:00,123 {"a":1}`,
-			format:     entry.FormatJSON,
-			wantPrefix: `2026-10-11 12:00:00,123`,
-			want:       []pair{num("a", "1")},
+			name:      "JSON after a timestamp with a space in it",
+			line:      `2026-10-11 12:00:00,123 {"a":1}`,
+			format:    entry.FormatJSON,
+			wantStamp: `2026-10-11 12:00:00,123`,
+			want:      []pair{num("a", "1")},
 		},
 		{
-			name:       "JSON after a container name",
-			line:       `svc-1  | {"a":1}`,
-			format:     entry.FormatJSON,
-			wantPrefix: `svc-1  |`,
-			want:       []pair{num("a", "1")},
+			name:          "JSON after a container name",
+			line:          `svc-1  | {"a":1}`,
+			format:        entry.FormatJSON,
+			wantCollector: `svc-1  |`,
+			wantSource:    `svc-1`,
+			want:          []pair{num("a", "1")},
 		},
 		{
-			name:       "JSON after a timestamp and a container name",
-			line:       `2026-10-11T12:00:00Z svc-1 | {"a":1}`,
-			format:     entry.FormatJSON,
-			wantPrefix: `2026-10-11T12:00:00Z svc-1 |`,
-			want:       []pair{num("a", "1")},
+			name:          "JSON after a timestamp and a container name",
+			line:          `2026-10-11T12:00:00Z svc-1 | {"a":1}`,
+			format:        entry.FormatJSON,
+			wantCollector: `2026-10-11T12:00:00Z svc-1 |`,
+			wantSource:    `svc-1`,
+			want:          []pair{num("a", "1")},
 		},
 		{
-			name:       "JSON after a container name and a timestamp",
-			line:       `svc-1  | 2026-10-11T12:00:00.123456789Z {"a":1}`,
-			format:     entry.FormatJSON,
-			wantPrefix: `svc-1  | 2026-10-11T12:00:00.123456789Z`,
-			want:       []pair{num("a", "1")},
+			name:          "JSON after a container name and a timestamp",
+			line:          `svc-1  | 2026-10-11T12:00:00.123456789Z {"a":1}`,
+			format:        entry.FormatJSON,
+			wantCollector: `svc-1  |`,
+			wantSource:    `svc-1`,
+			wantStamp:     `2026-10-11T12:00:00.123456789Z`,
+			want:          []pair{num("a", "1")},
 		},
 		{
-			name:       "JSON after a container name and a timestamp with a space in it",
-			line:       `svc-1 |2026-10-11 12:00:00 {"a":1}`,
-			format:     entry.FormatJSON,
-			wantPrefix: `svc-1 |2026-10-11 12:00:00`,
-			want:       []pair{num("a", "1")},
+			name:          "JSON after a container name and a timestamp with a space in it",
+			line:          `svc-1 |2026-10-11 12:00:00 {"a":1}`,
+			format:        entry.FormatJSON,
+			wantCollector: `svc-1 |`,
+			wantSource:    `svc-1`,
+			wantStamp:     `2026-10-11 12:00:00`,
+			want:          []pair{num("a", "1")},
 		},
 		{
-			name:       "JSON after two bars",
-			line:       `a | b | {"a":1}`,
-			format:     entry.FormatJSON,
-			wantPrefix: `a | b |`,
-			want:       []pair{num("a", "1")},
+			name:          "JSON after two bars",
+			line:          `a | b | {"a":1}`,
+			format:        entry.FormatJSON,
+			wantCollector: `a | b |`,
+			wantSource:    `a`,
+			want:          []pair{num("a", "1")},
 		},
-		{name: "JSON after a bar alone", line: `| {"a":1}`, format: entry.FormatJSON, wantPrefix: `|`, want: []pair{num("a", "1")}},
-		{name: "a word between the bar and the timestamp", line: `svc | out 2026-10-11T12:00:00Z {"a":1}`},
-		{name: "a word between the timestamp and JSON", line: `svc | 2026-10-11T12:00:00Z INFO {"a":1}`},
-		{name: "a timestamp before the bar and a word after it", line: `2026-10-11T12:00:00Z | out {"a":1}`},
+		{name: "JSON after a bar alone", line: `| {"a":1}`, format: entry.FormatJSON, wantCollector: `|`, want: []pair{num("a", "1")}},
+		{name: "a word between the bar and the timestamp", line: `svc | out 2026-10-11T12:00:00Z {"a":1}`, wantCollector: `svc |`, wantSource: `svc`},
+		{
+			name:          "a word between the timestamp and JSON",
+			line:          `svc | 2026-10-11T12:00:00Z INFO {"a":1}`,
+			wantCollector: `svc |`,
+			wantSource:    `svc`,
+			wantStamp:     `2026-10-11T12:00:00Z`,
+		},
+		{name: "a timestamp before the bar and a word after it", line: `2026-10-11T12:00:00Z | out {"a":1}`, wantStamp: `2026-10-11T12:00:00Z`},
 		{name: "a colored container name", line: "\x1b[36msvc-1  |\x1b[0m " + `{"a":1}`},
-		{name: "a pod name in brackets", line: `[pod/web-1/app] {"a":1}`},
 		{
-			name:       "JSON right after the bar",
-			line:       `  svc |{"a":1}  `,
-			format:     entry.FormatJSON,
-			wantPrefix: `svc |`,
-			want:       []pair{num("a", "1")},
+			name:          "JSON after a pod name in brackets",
+			line:          `[pod/web-1/app] {"a":1}`,
+			format:        entry.FormatJSON,
+			wantCollector: `[pod/web-1/app]`,
+			wantSource:    `pod/web-1/app`,
+			want:          []pair{num("a", "1")},
 		},
 		{
-			name:       "prefix of 64 bytes",
-			line:       strings.Repeat("s", 63) + `| {"a":1}`,
-			format:     entry.FormatJSON,
-			wantPrefix: strings.Repeat("s", 63) + `|`,
-			want:       []pair{num("a", "1")},
+			name:          "JSON after a pod name in brackets and a timestamp",
+			line:          `[pod/web-1/app] 2026-10-11T12:00:04.000000000Z {"a":1}`,
+			format:        entry.FormatJSON,
+			wantCollector: `[pod/web-1/app]`,
+			wantSource:    `pod/web-1/app`,
+			wantStamp:     `2026-10-11T12:00:04.000000000Z`,
+			want:          []pair{num("a", "1")},
 		},
 		{
-			name:       "prefix of 64 bytes and the whitespace around it",
-			line:       "  " + strings.Repeat("s", 63) + "|  \t" + `{"a":1}`,
-			format:     entry.FormatJSON,
-			wantPrefix: strings.Repeat("s", 63) + `|`,
-			want:       []pair{num("a", "1")},
+			name:          "logfmt after a pod name in brackets",
+			line:          `[pod/web-1/app] level=info msg=x`,
+			format:        entry.FormatLogfmt,
+			wantCollector: `[pod/web-1/app]`,
+			wantSource:    `pod/web-1/app`,
+			want:          []pair{str("level", "info"), str("msg", "x")},
+		},
+		{name: "a stack frame after a pod name", line: "[pod/web-1/app] \tat x a=1 b=2", wantCollector: `[pod/web-1/app]`, wantSource: `pod/web-1/app`},
+		{name: "indented pairs after a container name", line: "web-1 |   a=1 b=2", wantCollector: `web-1 |`, wantSource: `web-1`},
+		{name: "a plain line after a timestamp", line: "2026-10-11T12:00:00Z goroutine 1 [running]:", wantStamp: `2026-10-11T12:00:00Z`},
+		{
+			name:          "JSON right after the bar",
+			line:          `  svc |{"a":1}  `,
+			format:        entry.FormatJSON,
+			wantCollector: `svc |`,
+			wantSource:    `svc`,
+			want:          []pair{num("a", "1")},
+		},
+		{
+			name:          "prefix of 64 bytes",
+			line:          strings.Repeat("s", 63) + `| {"a":1}`,
+			format:        entry.FormatJSON,
+			wantCollector: strings.Repeat("s", 63) + `|`,
+			wantSource:    strings.Repeat("s", 63),
+			want:          []pair{num("a", "1")},
+		},
+		{
+			name:          "prefix of 64 bytes and the whitespace around it",
+			line:          "  " + strings.Repeat("s", 63) + "|  \t" + `{"a":1}`,
+			format:        entry.FormatJSON,
+			wantCollector: strings.Repeat("s", 63) + `|`,
+			wantSource:    strings.Repeat("s", 63),
+			want:          []pair{num("a", "1")},
 		},
 		{name: "prefix of 65 bytes", line: strings.Repeat("s", 64) + `| {"a":1}`},
 		{name: "prefix that is a word", line: `error: {"a":1}`},
 		{name: "prefix that is a sentence", line: `failed to parse {"a":1}`},
 		{name: "prefix that is a date without a time", line: `2026-10-11 {"a":1}`},
-		{name: "prefix with the bar in the middle", line: `svc | out {"a":1}`},
-		{name: "braces after a timestamp that are not JSON", line: `2026-10-11T12:00:00Z {foo}`},
-		{name: "braces after a container name that are not JSON", line: `svc | {foo}`},
+		{name: "prefix with the bar in the middle", line: `svc | out {"a":1}`, wantCollector: `svc |`, wantSource: `svc`},
+		{name: "braces after a timestamp that are not JSON", line: `2026-10-11T12:00:00Z {foo}`, wantStamp: `2026-10-11T12:00:00Z`},
+		{name: "braces after a container name that are not JSON", line: `svc | {foo}`, wantCollector: `svc |`, wantSource: `svc`},
 		{name: "text after JSON", line: `{"a":1} trailing`},
 		{name: "two JSON objects", line: `{"a":1} {"b":2}`},
 		{name: "braces that are not JSON", line: `{foo}`},
@@ -279,11 +327,12 @@ func TestParse(t *testing.T) {
 			want:   []pair{str("a", "1"), str("b", "2")},
 		},
 		{
-			name:       "prefixed JSON after a byte order mark",
-			line:       "\ufeff" + `svc | {"a":1}`,
-			format:     entry.FormatJSON,
-			wantPrefix: `svc |`,
-			want:       []pair{num("a", "1")},
+			name:          "prefixed JSON after a byte order mark",
+			line:          "\ufeff" + `svc | {"a":1}`,
+			format:        entry.FormatJSON,
+			wantCollector: `svc |`,
+			wantSource:    `svc`,
+			want:          []pair{num("a", "1")},
 		},
 		// Indented lines are frames of a stack trace, even when they hold pairs.
 		{name: "a line of Python source with pairs", line: "    return render(request, template_name=name, context=ctx)"},
@@ -304,11 +353,12 @@ func TestParse(t *testing.T) {
 		{name: "indented JSON", line: " \t{\"a\":1}", format: entry.FormatJSON, want: []pair{num("a", "1")}},
 		{name: "indented JSON after a byte order mark", line: "\ufeff {\"a\":1}", format: entry.FormatJSON, want: []pair{num("a", "1")}},
 		{
-			name:       "indented JSON after a container name",
-			line:       `  svc | {"a":1}`,
-			format:     entry.FormatJSON,
-			wantPrefix: `svc |`,
-			want:       []pair{num("a", "1")},
+			name:          "indented JSON after a container name",
+			line:          `  svc | {"a":1}`,
+			format:        entry.FormatJSON,
+			wantCollector: `svc |`,
+			wantSource:    `svc`,
+			want:          []pair{num("a", "1")},
 		},
 		// A known limit: a line of a trace that is not indented, with pairs at its end, is still logfmt.
 		{
@@ -336,16 +386,23 @@ func TestParse(t *testing.T) {
 			if e.Format != tt.format {
 				t.Errorf("Parse(%q): format = %d, want %d", tt.line, e.Format, tt.format)
 			}
-			if string(e.Prefix) != tt.wantPrefix || (tt.wantPrefix == "") != (e.Prefix == nil) {
-				t.Errorf("Parse(%q): prefix = %q (nil: %v), want %q", tt.line, e.Prefix, e.Prefix == nil, tt.wantPrefix)
-			}
-			wantCollector := tt.collector || tt.format == entry.FormatJSON && tt.wantPrefix != ""
-			if e.CollectorPrefix != wantCollector {
-				t.Errorf("Parse(%q): CollectorPrefix = %v, want %v", tt.line, e.CollectorPrefix, wantCollector)
-			}
-			// An append to the prefix must not reach the bytes of the line that follow it.
-			if cap(e.Prefix) != len(e.Prefix) {
-				t.Errorf("Parse(%q): the prefix has %d spare bytes, want none", tt.line, cap(e.Prefix)-len(e.Prefix))
+			for _, part := range []struct {
+				name string
+				got  []byte
+				want string
+			}{
+				{"collector", e.Collector, tt.wantCollector},
+				{"source", e.Source, tt.wantSource},
+				{"stamp", e.Stamp, tt.wantStamp},
+				{"prefix", e.Prefix, tt.wantPrefix},
+			} {
+				if string(part.got) != part.want || (part.want == "") != (part.got == nil) {
+					t.Errorf("Parse(%q): %s = %q (nil: %v), want %q", tt.line, part.name, part.got, part.got == nil, part.want)
+				}
+				// An append to a part must not reach the bytes of the line that follow it.
+				if cap(part.got) != len(part.got) {
+					t.Errorf("Parse(%q): the %s has %d spare bytes, want none", tt.line, part.name, cap(part.got)-len(part.got))
+				}
 			}
 			if got := pairsOf(e.Fields); !slices.Equal(got, tt.want) {
 				t.Errorf("Parse(%q)\n got %+v\nwant %+v", tt.line, got, tt.want)
@@ -354,8 +411,8 @@ func TestParse(t *testing.T) {
 				t.Errorf("Parse(%q): Line = %q, want the line itself", tt.line, e.Line)
 			}
 			if tt.format == entry.FormatPlain {
-				if got := rolesOf(t, e); got != (roles{}) {
-					t.Errorf("Parse(%q): a plain line has the roles %+v", tt.line, got)
+				if got := rolesOf(t, e); got != (roles{time: got.time}) || (got.time == "") != (e.Stamp == nil) {
+					t.Errorf("Parse(%q): a plain line has the roles %+v, want only the time of its stamp %q", tt.line, got, e.Stamp)
 				}
 			}
 		})
@@ -371,11 +428,11 @@ func TestAppendJSONLineFieldsRejects(t *testing.T) {
 	for _, line := range lines {
 		kept := []entry.Field{{Key: []byte("kept")}}
 
-		fields, prefix, ok := appendJSONLineFields(kept, slices.Clip([]byte(line)))
+		fields, prefix, split, ok := appendJSONLineFields(kept, slices.Clip([]byte(line)))
 
-		if ok || prefix != nil || len(fields) != 1 || string(fields[0].Key) != "kept" {
-			t.Errorf("appendJSONLineFields(%q) = %+v, prefix %q, %v; want dst as it was, no prefix and false",
-				line, pairsOf(fields), prefix, ok)
+		if ok || prefix != nil || split.ok || split.bar != 0 || split.stamp != nil || len(fields) != 1 || string(fields[0].Key) != "kept" {
+			t.Errorf("appendJSONLineFields(%q) = %+v, prefix %q (%+v), %v; want dst as it was, no prefix and false",
+				line, pairsOf(fields), prefix, split, ok)
 		}
 	}
 }
@@ -407,9 +464,9 @@ func TestParseAssignsRoles(t *testing.T) {
 			want: roles{"2026-10-11T12:00:00Z", entry.LevelDebug, "ts", "lvl", "msg"},
 		},
 		{
-			name: "prefixed JSON takes the time from a field, not from the prefix",
+			name: "prefixed JSON without a time field takes the time of the prefix",
 			line: `2026-10-11T12:00:00Z {"level":"error","message":"x"}`,
-			want: roles{level: entry.LevelError, levelKey: "level", msgKey: "message"},
+			want: roles{time: "2026-10-11T12:00:00Z", level: entry.LevelError, levelKey: "level", msgKey: "message"},
 		},
 		{
 			name: "time without a zone is in the zone of the parser",
@@ -537,5 +594,187 @@ func TestParseDoesNotAllocate(t *testing.T) {
 		if allocs := testing.AllocsPerRun(100, func() { p.Parse(b) }); allocs != 0 {
 			t.Errorf("Parse allocates %v times for %q, want 0", allocs, line)
 		}
+	}
+}
+
+func TestSplitCollector(t *testing.T) {
+	const stamp = "2026-10-11T12:00:00.123456789Z"
+	name253 := strings.Repeat("s", 253)
+	stamp64 := "2026-10-11T12:00:00." + strings.Repeat("1", 43) + "Z"
+	tests := []struct {
+		name, line                         string
+		collector, source, wantStamp, body string
+	}{
+		{name: "docker compose", line: "web-1    | hello", collector: "web-1    |", source: "web-1", body: "hello"},
+		{name: "docker compose, the longest name", line: "worker-2 | hello", collector: "worker-2 |", source: "worker-2", body: "hello"},
+		{name: "docker compose, an empty line", line: "web-1    | ", collector: "web-1    |", source: "web-1"},
+		{name: "docker compose, the bar at the end", line: "web-1 |", collector: "web-1 |", source: "web-1"},
+		{name: "docker compose, an indented line", line: "web-1 |   at x", collector: "web-1 |", source: "web-1", body: "  at x"},
+		{name: "docker compose, a name with dots and underscores", line: "proj_web.1 | x", collector: "proj_web.1 |", source: "proj_web.1", body: "x"},
+		{
+			name: "docker compose -t", line: "web-1  | 2026-10-11T15:00:00.123456789+03:00 hello",
+			collector: "web-1  |", source: "web-1", wantStamp: "2026-10-11T15:00:00.123456789+03:00", body: "hello",
+		},
+		{name: "kubectl --prefix", line: "[pod/web-1/app] hello", collector: "[pod/web-1/app]", source: "pod/web-1/app", body: "hello"},
+		{name: "kubectl --prefix, an empty line", line: "[pod/web-1/app]", collector: "[pod/web-1/app]", source: "pod/web-1/app"},
+		{
+			name: "kubectl --prefix --timestamps", line: "[pod/web-7d9f.x/app] " + stamp + " hello",
+			collector: "[pod/web-7d9f.x/app]", source: "pod/web-7d9f.x/app", wantStamp: stamp, body: "hello",
+		},
+		{name: "kubectl --timestamps", line: stamp + " hello", wantStamp: stamp, body: "hello"},
+		{name: "a timestamp without a fraction", line: "2026-10-11T12:00:00Z hello", wantStamp: "2026-10-11T12:00:00Z", body: "hello"},
+		{name: "a timestamp with an offset", line: "2026-10-11T12:00:00-07:00 x", wantStamp: "2026-10-11T12:00:00-07:00", body: "x"},
+		{name: "a timestamp at the end", line: stamp, wantStamp: stamp},
+		{name: "a timestamp before an indented line", line: stamp + " \tat x", wantStamp: stamp, body: "\tat x"},
+
+		{name: "a word in brackets", line: "[main] hello", body: "[main] hello"},
+		{name: "brackets with one slash", line: "[pod/web-1] hello", body: "[pod/web-1] hello"},
+		{name: "brackets with an empty name", line: "[pod//app] hello", body: "[pod//app] hello"},
+		{name: "brackets with an empty container", line: "[pod/web-1/] hello", body: "[pod/web-1/] hello"},
+		{name: "brackets with three slashes", line: "[pod/a/b/c] hello", body: "[pod/a/b/c] hello"},
+		{name: "brackets of another kind", line: "[deploy/web/app] hello", body: "[deploy/web/app] hello"},
+		{name: "brackets without a space after them", line: "[pod/web-1/app]hello", body: "[pod/web-1/app]hello"},
+		{name: "a bar without a space before it", line: "INFO| hello", body: "INFO| hello"},
+		{name: "a bar without a space after it", line: "svc |hello", body: "svc |hello"},
+		{name: "a bar and a tab", line: "svc |\thello", body: "svc |\thello"},
+		{name: "a name with a space", line: "a b | hello", body: "a b | hello"},
+		{name: "a bar alone", line: "| hello", body: "| hello"},
+		{name: "a name after a space", line: " svc | hello", body: " svc | hello"},
+		{name: "loguru", line: "2026-10-11 12:00:03.123 | INFO     | app - x", body: "2026-10-11 12:00:03.123 | INFO     | app - x"},
+		{name: "logback", line: "2026-10-11 12:00:00,123 INFO  [main] x", body: "2026-10-11 12:00:00,123 INFO  [main] x"},
+		{name: "a timestamp without a zone", line: "2026-10-11T12:00:00 x", body: "2026-10-11T12:00:00 x"},
+		{name: "a timestamp with an offset without a colon", line: "2026-10-11T12:00:00+0300 x", body: "2026-10-11T12:00:00+0300 x"},
+		{name: "a timestamp that is not a time", line: "2026-13-11T12:00:00Z x", body: "2026-13-11T12:00:00Z x"},
+		{name: "a timestamp glued to the text", line: "2026-10-11T12:00:00Zx", body: "2026-10-11T12:00:00Zx"},
+		{name: "a timestamp before the name", line: "2026-10-11T12:00:00Z svc | x", wantStamp: "2026-10-11T12:00:00Z", body: "svc | x"},
+		{name: "a name longer than the limit", line: strings.Repeat("s", 254) + " | x", body: strings.Repeat("s", 254) + " | x"},
+		{name: "a name at the limit", line: strings.Repeat("s", 253) + " | x", collector: strings.Repeat("s", 253) + " |", source: strings.Repeat("s", 253), body: "x"},
+		{name: "a name of the length that is scanned byte by byte", line: strings.Repeat("s", 64) + " | x", collector: strings.Repeat("s", 64) + " |", source: strings.Repeat("s", 64), body: "x"},
+		{name: "a name just past it", line: strings.Repeat("s", 65) + " | x", collector: strings.Repeat("s", 65) + " |", source: strings.Repeat("s", 65), body: "x"},
+		{name: "a name that holds a byte of no name past it", line: strings.Repeat("s", 70) + "! | x", body: strings.Repeat("s", 70) + "! | x"},
+		{name: "a long word without a space", line: strings.Repeat("a", 300), body: strings.Repeat("a", 300)},
+		{name: "a word of the length of the short name", line: strings.Repeat("a", 64), body: strings.Repeat("a", 64)},
+		{name: "padding at the limit", line: "s" + strings.Repeat(" ", 253) + "| x", collector: "s" + strings.Repeat(" ", 253) + "|", source: "s", body: "x"},
+		{name: "padding past the limit", line: "s" + strings.Repeat(" ", 254) + "| x", body: "s" + strings.Repeat(" ", 254) + "| x"},
+		{
+			name: "a pod and a container at the limit", line: "[pod/" + name253 + "/" + name253 + "] x",
+			collector: "[pod/" + name253 + "/" + name253 + "]", source: "pod/" + name253 + "/" + name253, body: "x",
+		},
+		{name: "a pod past the limit", line: "[pod/" + name253 + "s/app] x", body: "[pod/" + name253 + "s/app] x"},
+		{name: "a container past the limit", line: "[pod/web/" + name253 + "s] x", body: "[pod/web/" + name253 + "s] x"},
+		{name: "a timestamp at the limit", line: stamp64 + " x", wantStamp: stamp64, body: "x"},
+		{name: "a timestamp past the limit", line: stamp64[:20] + "1" + stamp64[20:] + " x", body: stamp64[:20] + "1" + stamp64[20:] + " x"},
+		{name: "a plain line", line: "hello world", body: "hello world"},
+		{name: "an empty line", line: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Clipped, so that a read past the end of the line panics instead of finding spare capacity.
+			line := slices.Clip([]byte(tt.line))
+
+			collector, source, gotStamp, body, when := splitCollector(line)
+			// The time of a strict stamp is read once, here; its zone is its own.
+			if want, err := time.Parse(time.RFC3339Nano, tt.wantStamp); (err == nil) != !when.IsZero() || (!when.Equal(want) && err == nil) {
+				t.Errorf("splitCollector(%q): time %v, want the time of %q", tt.line, when, tt.wantStamp)
+			}
+			// With spare capacity, so that a part that runs to the end of the line shows it unless it is clipped.
+			_, _, _, spareBody, _ := splitCollector(append(make([]byte, 0, len(line)+8), line...))
+			if cap(spareBody) != len(spareBody) {
+				t.Errorf("splitCollector(%q): body has %d spare bytes, want none", tt.line, cap(spareBody)-len(spareBody))
+			}
+
+			for _, part := range []struct {
+				name     string
+				got      []byte
+				want     string
+				canBeNil bool
+			}{
+				{"collector", collector, tt.collector, true},
+				{"source", source, tt.source, true},
+				{"stamp", gotStamp, tt.wantStamp, true},
+				{"body", body, tt.body, false},
+			} {
+				if string(part.got) != part.want || part.canBeNil && (part.want == "") != (part.got == nil) {
+					t.Errorf("splitCollector(%q): %s = %q (nil: %v), want %q", tt.line, part.name, part.got, part.got == nil, part.want)
+				}
+				// An append to a part must not reach the bytes of the line that follow it.
+				if part.canBeNil && cap(part.got) != len(part.got) {
+					t.Errorf("splitCollector(%q): %s has %d spare bytes, want none", tt.line, part.name, cap(part.got)-len(part.got))
+				}
+			}
+		})
+	}
+}
+
+// The one separator byte after what a collector wrote is dropped; the rest of the whitespace is the line's.
+func TestParseBody(t *testing.T) {
+	tests := []struct{ name, line, body string }{
+		{name: "a tab after the bar", line: "a\t|\t{\"a\":1}", body: `{"a":1}`},
+		{name: "spaces before the object", line: `a | b |    {"a":1}`, body: `   {"a":1}`},
+		{name: "no space before the object", line: `2026-10-11 12:00:00{"a":1}`, body: `{"a":1}`},
+		{name: "logfmt after a stamp", line: "2026-10-11 12:00:00,123  a=1 b=2", body: " a=1 b=2"},
+		{name: "a strict collector", line: `svc |    {"a":1}`, body: `   {"a":1}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var p Parser
+			if e := p.Parse([]byte(tt.line)); string(e.Body) != tt.body {
+				t.Errorf("Parse(%q).Body = %q, want %q", tt.line, e.Body, tt.body)
+			}
+		})
+	}
+}
+
+func TestSpacesAreIsSpace(t *testing.T) {
+	for c := range 256 {
+		if in := strings.IndexByte(spaces, byte(c)) >= 0; in != isSpace(byte(c)) {
+			t.Errorf("byte %#x: in spaces %v, isSpace %v", c, in, !in)
+		}
+	}
+}
+
+func TestNameBytes(t *testing.T) {
+	for c := range 256 {
+		if want := isAlnum(byte(c)) || c == '.' || c == '_' || c == '-'; nameBytes[c] != want {
+			t.Errorf("nameBytes[%#x] = %v, want %v", c, nameBytes[c], want)
+		}
+	}
+}
+
+// An entry without a time of its own, and a plain line, take the time a collector wrote.
+func TestParseTimeFromStamp(t *testing.T) {
+	moscow := time.FixedZone("test", 3*60*60)
+	at := func(s string) time.Time {
+		tm, err := time.Parse(time.RFC3339Nano, s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tm
+	}
+	tests := []struct {
+		name, line string
+		want       time.Time
+		timeField  int
+	}{
+		{name: "a plain line after a pod", line: "[pod/a/b] 2026-10-11T12:00:00.5Z \tat x", want: at("2026-10-11T12:00:00.5Z"), timeField: -1},
+		{name: "a stamp alone", line: "2026-10-11T15:00:00+03:00", want: at("2026-10-11T12:00:00Z"), timeField: -1},
+		{name: "JSON without a time", line: `2026-10-11T12:00:00Z {"msg":"x"}`, want: at("2026-10-11T12:00:00Z"), timeField: -1},
+		{name: "logfmt without a time", line: `web-1 | 2026-10-11T12:00:00Z a=1 b=2`, want: at("2026-10-11T12:00:00Z"), timeField: -1},
+		{name: "the time of the entry wins", line: `2026-10-11T12:00:00Z {"time":"2026-10-11T13:00:00Z"}`, want: at("2026-10-11T13:00:00Z"), timeField: 0},
+		{name: "a time of the entry that cannot be read", line: `2026-10-11T12:00:00Z {"time":"yesterday"}`, want: at("2026-10-11T12:00:00Z"), timeField: -1},
+		{name: "a stamp without a zone is in Loc", line: `web | 2026-10-11 12:00:00,123 {"a":1}`, want: at("2026-10-11T09:00:00.123Z"), timeField: -1},
+		{name: "a stamp before the bar is the collector's text", line: `2026-10-11T12:00:00Z svc | {"a":1}`, timeField: -1},
+		{name: "no stamp", line: `web-1 | hello`, timeField: -1},
+		{name: "a plain line", line: `2026-10-11 12:00:00 hello`, timeField: -1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := Parser{Loc: moscow}
+			p.Parse([]byte(`{"time":"2000-01-01T00:00:00Z"}`)) // its time must not stay
+			e := p.Parse([]byte(tt.line))
+			if !e.Time.Equal(tt.want) || e.TimeField() != tt.timeField {
+				t.Errorf("Parse(%q): time %v, field %d; want %v, %d", tt.line, e.Time, e.TimeField(), tt.want, tt.timeField)
+			}
+		})
 	}
 }

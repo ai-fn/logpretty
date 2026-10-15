@@ -1,5 +1,8 @@
 12:00:00.123 INFO  User {Name} logged in  Name=bob
 12:00:01.123 WARN  Disk 91% full  @i=1a2b3c4d Used=91
-12:00:02.123 ERROR Request failed  @x="System.Exception: boom\n   at App.Run() in /app/Program.cs:line 12"
+12:00:02.123 ERROR Request failed
+  @x:
+    System.Exception: boom
+       at App.Run() in /app/Program.cs:line 12
 12:00:03.123 TRACE Starting
 12:00:04.123 INFO  MessageTemplate="Hello {Name}" RenderedMessage="Hello \"bob\"" Properties={"Name":"bob"}

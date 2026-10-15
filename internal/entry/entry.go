@@ -60,14 +60,16 @@ type Field struct {
 
 // Entry is a parsed line. Its slices point into buffers the parser reuses, so it is valid until the next line is parsed.
 type Entry struct {
-	Line   []byte
-	Prefix []byte // text before the structured part, such as a container name or a timestamp
-	Format Format
-	Time   time.Time
-	Level  Level   // unknown unless a field names it; the one exception is a Serilog event without "@l", which is info
-	Fields []Field // every pair of the line, in its original order
-
-	CollectorPrefix bool // a log collector wrote Prefix (docker compose, kubectl --timestamps), not the logger
+	Line      []byte
+	Collector []byte // what a log collector wrote in front of the line, except its timestamp: "web-1  |", "[pod/web-1/app]"
+	Source    []byte // the stream that Collector names: "web-1", "pod/web-1/app"
+	Stamp     []byte // the timestamp a log collector wrote, as kubectl --timestamps and docker compose -t do
+	Body      []byte // the line past what the collector wrote
+	Prefix    []byte // the logger's own text before logfmt pairs, as in klog
+	Format    Format
+	Time      time.Time // from the field TimeField names, or else from Stamp
+	Level     Level     // unknown unless a field names it; the one exception is a Serilog event without "@l", which is info
+	Fields    []Field   // every pair of the line, in its original order
 
 	// Positions in Fields plus one, so that the zero Entry has no roles.
 	timeField, levelField, msgField int

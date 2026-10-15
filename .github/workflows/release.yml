@@ -27,6 +27,16 @@ jobs:
           # GoReleaser builds the changelog from the history up to the previous tag
           fetch-depth: 0
           persist-credentials: false
+      # a release is tagged on main, and its notes start at the release before it, never at a candidate;
+      # HEAD^, since HEAD holds the tag being released
+      - name: Check that the release is on main and find the release before it
+        if: ${{ !contains(github.ref_name, '-') }}
+        run: |
+          fail() { echo "::error::$GITHUB_REF_NAME: $1"; exit 1; }
+          git merge-base --is-ancestor HEAD origin/main || fail "the tagged commit is not on main"
+          previous=$(git describe --tags --abbrev=0 --exclude '*-*' HEAD^) || fail "no release before it"
+          echo "previous release: $previous"
+          echo "GORELEASER_PREVIOUS_TAG=$previous" >> "$GITHUB_ENV"
       # the cask is pushed after the release is out, and a release that is out cannot be run again
       - name: Check that the token of the tap is there and valid
         env:

@@ -1,3 +1,6 @@
 \e[2m12:00:00.123\e[0m \e[32mINFO\e[0m  started  \e[2mecs.version=\e[0m1.6.0 \e[2mservice.name=\e[0mapi \e[2mlog=\e[0m{"logger":"x"}
-\e[2m12:00:01.123\e[0m \e[31mERROR\e[0m boom  \e[2merror.message=\e[0mx \e[2merror.stack_trace=\e[0m"x\n\tat y"
+\e[2m12:00:01.123\e[0m \e[31mERROR\e[0m boom  \e[2merror.message=\e[0mx
+  \e[2merror.stack_trace:\e[0m
+    x
+    	at y
 \e[2m12:00:02.123\e[0m \e[33mWARN\e[0m  slow  \e[2mlog.logger=\e[0mx \e[2mprocess.thread.name=\e[0mmain \e[2mecs.version=\e[0m1.6.0

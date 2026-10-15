@@ -2,7 +2,9 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    # feature branches are merged locally and may never get a pull request,
+    # so their pushes are checked too
+    branches: [main, develop, "release/**", "hotfix/**", "feature/**"]
   pull_request:
   workflow_dispatch:
 
@@ -11,7 +13,8 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # every commit on main is a release: a run there is never cancelled once it runs
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   test:

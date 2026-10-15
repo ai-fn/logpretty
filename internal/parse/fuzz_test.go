@@ -481,6 +481,78 @@ func referenceFormat(t *testing.T, body []byte) (format entry.Format, prefix str
 	return entry.FormatPlain, "", false
 }
 
+// The forms a log collector writes in front of a line, as they are stated: kubectl --prefix, docker compose,
+// then an RFC 3339 timestamp with a zone; each is followed by a space or the end of the line.
+var (
+	refPodPrefix     = regexp.MustCompile(`^\[pod/([A-Za-z0-9._-]{1,253})/([A-Za-z0-9._-]{1,253})\](?: |$)`)
+	refComposePrefix = regexp.MustCompile(`^([A-Za-z0-9][A-Za-z0-9._-]{0,252}) {1,253}\|(?: |$)`)
+	refStampPrefix   = regexp.MustCompile(`^([0-9]{4}-[0-9]{2}-[0-9]{2}T[^ ]{0,53})(?: |$)`)
+	refZone          = regexp.MustCompile(`(?:Z|[+-][0-9]{2}:[0-9]{2})$`)
+)
+
+// refEntry is what Parse is expected to find in a line.
+type refEntry struct {
+	format                                 entry.Format
+	collector, source, stamp, prefix, body string
+}
+
+// referenceParse states the rules of Parse: the strict forms first, then the format of the rest, whose vetted
+// prefix adds to what a collector wrote. It also returns the line past the strict forms and the vetted JSON prefix.
+func referenceParse(t *testing.T, line []byte) (r refEntry, strictBody, jsonPrefix string) {
+	t.Helper()
+	start := strings.TrimPrefix(string(line), "\xef\xbb\xbf")
+	rest := start
+	if m := refPodPrefix.FindStringSubmatch(rest); m != nil {
+		r.source = "pod/" + m[1] + "/" + m[2]
+		r.collector, rest = "["+r.source+"]", rest[len(m[0]):]
+	} else if m := refComposePrefix.FindStringSubmatch(rest); m != nil {
+		r.collector, r.source, rest = strings.TrimSuffix(m[0], " "), m[1], rest[len(m[0]):]
+	}
+	if m := refStampPrefix.FindStringSubmatch(rest); m != nil && refZone.MatchString(m[1]) {
+		if _, ok := referenceDateTime(m[1], time.UTC); ok {
+			r.stamp, rest = m[1], rest[len(m[0]):]
+		}
+	}
+	r.body, strictBody = rest, rest
+	format, prefix, vetted := referenceFormat(t, []byte(rest))
+	r.format = format
+	switch {
+	case format == entry.FormatPlain || prefix == "":
+	case !vetted:
+		r.prefix = prefix
+	default:
+		if format == entry.FormatJSON {
+			jsonPrefix = prefix
+		}
+		// Where the prefix stands in the line: past the strict forms and the spaces before it.
+		at := len(start) - len(rest) + len(rest) - len(strings.TrimLeft(rest, logfmtSpace))
+		r.body = start[at+len(prefix):]
+		if r.body != "" && strings.ContainsRune(logfmtSpace, rune(r.body[0])) {
+			r.body = r.body[1:]
+		}
+		if bar := strings.LastIndex(prefix, "|"); bar >= 0 {
+			r.collector = strings.Trim(start[:at+bar+1], logfmtSpace)
+			if r.source == "" {
+				r.source = strings.Trim(prefix[:bar], logfmtSpace)
+			}
+			r.stamp = strings.TrimLeft(prefix[bar+1:], logfmtSpace)
+		} else {
+			r.collector, r.stamp = strings.Trim(start[:at], logfmtSpace), prefix
+		}
+	}
+	return r, strictBody, jsonPrefix
+}
+
+// offsetIn returns where part starts in line by its address, or -1 if it is not a part of line.
+func offsetIn(line, part []byte) int {
+	for i := range line {
+		if &line[i] == &part[0] {
+			return i
+		}
+	}
+	return -1
+}
+
 func FuzzParse(f *testing.F) {
 	for _, seed := range []string{
 		`{"time":"2026-10-11T12:00:00Z","level":"warn","msg":"x","n":1}`, " \t{\"a\":1} \r", `{}`, `a=1 b="x y"`,
@@ -496,6 +568,12 @@ func FuzzParse(f *testing.F) {
 		`svc-1  | 2026-10-11T12:00:00Z a=1 b=2`, `svc | out a=1 b=2`, `2026/10/11 12:00:01 INFO hello a=1 b=2`,
 		strings.Repeat("s", 63) + `| a=1 b=2`, strings.Repeat("s", 64) + `| a=1 b=2`, "\tat x a=1 b=2", "  level=info msg=x",
 		"\ra=1 b=2", "\xef\xbb\xbf a=1 b=2", "\xef\xbb\xbf\ta=1 b=2", "\vx a=1 b=2", `Caused by: boom x=1 y=2`,
+		"web-1    | hello", "web-1    | ", "web-1 |", "web-1 |   a=1 b=2", "[pod/web-1/app] hello", "[pod/web-1/app]",
+		"[pod/web-1/app] 2026-10-11T12:00:00.123456789Z {\"a\":1}", "2026-10-11T12:00:00Z goroutine 1 [running]:",
+		"web-1  | 2026-10-11T15:00:00.123456789+03:00 level=info msg=x", "2026-10-11T12:00:00Z svc-1 | {\"a\":1}",
+		"2026-10-11T12:00:00Z 2026-10-11 12:00:00 {\"a\":1}", "a | b | {\"a\":1}", "web | 2026-10-11 12:00:00 +0300 {\"a\":1}",
+		"[pod//app] x", "[pod/a/b/c] x", "INFO| x", "svc |x", strings.Repeat("s", 253) + " | x", strings.Repeat("s", 254) + " | x",
+		"2026-10-11T12:00:00.123456789012345678901234567890123456789012345Z x", "2026-10-11T12:00:00+0300 x",
 	} {
 		f.Add([]byte(seed))
 	}
@@ -503,8 +581,8 @@ func FuzzParse(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
 		// Clipped, so that a read past the end panics instead of finding spare capacity.
 		line := slices.Clip(slices.Clone(data))
-		body := bytes.TrimPrefix(line, []byte("\xef\xbb\xbf"))
-		wantFormat, wantPrefix, wantCollector := referenceFormat(t, body)
+		want, strictBody, jsonPrefix := referenceParse(t, line)
+		body := []byte(strictBody)
 		// The parser has seen other lines: nothing of them may show in this one.
 		p := Parser{Loc: testLoc}
 		p.Parse([]byte(`svc | {"time":"2026-10-11T12:00:00Z","level":"error","msg":"boom","a":{"b":[1,2]},"c":3,"d":4}`))
@@ -512,17 +590,18 @@ func FuzzParse(f *testing.F) {
 
 		e := p.Parse(line)
 
-		if e.Format != wantFormat || string(e.Prefix) != wantPrefix || (wantPrefix == "") != (e.Prefix == nil) || e.CollectorPrefix != wantCollector {
-			t.Fatalf("Parse(%q): format %d with prefix %q (nil: %v, collector: %v), want format %d with prefix %q (collector: %v)",
-				line, e.Format, e.Prefix, e.Prefix == nil, e.CollectorPrefix, wantFormat, wantPrefix, wantCollector)
+		got := refEntry{e.Format, string(e.Collector), string(e.Source), string(e.Stamp), string(e.Prefix), string(e.Body)}
+		if got != want {
+			t.Fatalf("Parse(%q)\n got %+v\nwant %+v", line, got, want)
 		}
+		checkParts(t, line)
 		if e.Format == entry.FormatLogfmt && len(body) > 0 && (body[0] == ' ' || body[0] == '\t') {
 			t.Fatalf("Parse(%q): an indented line is logfmt", line)
 		}
 		switch e.Format {
 		case entry.FormatJSON:
 			object := body[len(body)-len(bytes.TrimLeft(body, logfmtSpace)):]
-			if wantPrefix != "" {
+			if jsonPrefix != "" {
 				object = body[bytes.IndexByte(body, '{'):]
 			}
 			if want, _ := appendJSONFields(nil, object); !slices.Equal(pairsOf(e.Fields), pairsOf(want)) {
@@ -537,13 +616,56 @@ func FuzzParse(f *testing.F) {
 				t.Fatalf("Parse(%q): a plain line has the fields %+v", line, pairsOf(e.Fields))
 			}
 		}
-		// The roles are those of the fields alone, whatever the parser held before.
-		fresh := entry.Entry{Fields: e.Fields}
+		// The roles are those of the fields alone, whatever the parser held before; the time a collector wrote
+		// stands in for a time field the entry lacks.
+		fresh := entry.Entry{Fields: e.Fields, Stamp: e.Stamp}
 		assignRoles(&fresh, testLoc)
+		if fresh.TimeField() < 0 && want.stamp != "" {
+			if fresh.Time, _ = referenceDateTime(want.stamp, testLoc); fresh.Time.IsZero() {
+				t.Fatalf("Parse(%q): the stamp %q is not a time", line, want.stamp)
+			}
+		}
 		if got, want := rolesOf(t, e), rolesOf(t, &fresh); got != want {
 			t.Fatalf("Parse(%q): roles %+v, want %+v", line, got, want)
 		}
 	})
+}
+
+// checkParts parses a copy of line with spare capacity and checks that the parts of the entry are the line's own
+// bytes, in order, and that an append to one of them cannot reach the bytes after it.
+func checkParts(t *testing.T, line []byte) {
+	t.Helper()
+	spare := append(make([]byte, 0, len(line)+16), line...)
+	var p Parser
+	e := p.Parse(spare)
+	begin, end := 0, 0
+	for _, part := range []struct {
+		name  string
+		b     []byte
+		inner bool // lies inside the part before it instead of after it
+	}{{"collector", e.Collector, false}, {"source", e.Source, true}, {"stamp", e.Stamp, false}, {"body", e.Body, false}, {"prefix", e.Prefix, true}} {
+		if ((len(part.b) == 0) != (part.b == nil) && part.name != "body") || cap(part.b) != len(part.b) {
+			t.Fatalf("Parse(%q): %s %q is empty but not nil, or has spare bytes", line, part.name, part.b)
+		}
+		if len(part.b) == 0 {
+			continue
+		}
+		at := offsetIn(spare, part.b)
+		switch {
+		case at < 0:
+			t.Fatalf("Parse(%q): %s %q is not a part of the line", line, part.name, part.b)
+		case part.inner && (at < begin || at+len(part.b) > end):
+			t.Fatalf("Parse(%q): %s %q is not inside the part before it", line, part.name, part.b)
+		case !part.inner && at < end:
+			t.Fatalf("Parse(%q): %s %q at %d starts before the end %d of the part before it", line, part.name, part.b, at, end)
+		}
+		if !part.inner {
+			begin, end = at, at+len(part.b)
+		}
+	}
+	if len(e.Body) > 0 && offsetIn(spare, e.Body)+len(e.Body) != len(spare) {
+		t.Fatalf("Parse(%q): body %q does not run to the end of the line", line, e.Body)
+	}
 }
 
 // referenceFind is Finder.Find over what encoding/json reads. It reports unsure when a key on the way has
@@ -616,11 +738,11 @@ func FuzzFind(f *testing.F) {
 			t.Fatalf("Find(%q, %q) found nothing but returned %q of kind %v", line, path, got.Raw, got.Kind)
 		}
 
-		// encoding/json is asked about a lone object only: a prefix or logfmt has no reference.
-		if e.Format != entry.FormatJSON || len(e.Prefix) > 0 {
+		// encoding/json is asked about the object past what a collector wrote; logfmt has no reference.
+		if e.Format != entry.FormatJSON {
 			return
 		}
-		want, wantOK, unsure := referenceFind(t, bytes.TrimPrefix(line, []byte(byteOrderMark)), string(path))
+		want, wantOK, unsure := referenceFind(t, e.Body, string(path))
 		if unsure {
 			return
 		}

@@ -43,7 +43,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		w:      bufio.NewWriterSize(stdout, writeBufferSize),
 		filter: filter.Filter{MinLevel: cfg.Level, Where: cfg.Where, Plain: cfg.Plain},
 	}
-	p.renderer.NoTime, p.renderer.Fields = cfg.NoTime, render.Select(cfg.Fields)
+	p.renderer.NoTime, p.renderer.NoExpand, p.renderer.Fields = cfg.NoTime, cfg.NoExpand, render.Select(cfg.Fields)
 	if cfg.UTC {
 		// The same zone for both, so that a time written without one is shown as it was written.
 		p.parser.Loc, p.renderer.Loc = time.UTC, time.UTC
@@ -159,7 +159,7 @@ func (p *pipeline) burst(line []byte, dropped int, readErr error) (done bool, er
 // A line that was cut is not parsed: what is left of it says little about its format.
 func (p *pipeline) write(line []byte, dropped int) error {
 	if dropped > 0 {
-		if !p.filter.KeepPlain() {
+		if !p.filter.KeepPlain(nil) {
 			return nil
 		}
 		p.out = p.renderer.AppendTruncated(p.out[:0], line, dropped)

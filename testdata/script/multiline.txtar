@@ -5,6 +5,39 @@ exec logpretty --utc --level error
 cmp stdout want_traceback
 ! stderr .
 
+# What kubectl logs --prefix --timestamps writes is read on every line, so a JSON line after it is an entry
+# and the plain lines of its stack trace follow it; its timestamp is the time of a line without its own.
+stdin pod.log
+exec logpretty --utc
+cmp stdout want_pod
+stdin pod.log
+exec logpretty --utc --level error
+cmp stdout want_pod_error
+! stderr .
+
+# docker compose mixes the lines of its containers: a stack trace goes the way of the last entry of its own
+# container, whatever the others write in between.
+stdin compose.log
+exec logpretty --utc --level error
+cmp stdout want_compose
+! stderr .
+
+# A value with line breaks, such as the stack trace zap keeps in a field, is unfolded under its entry,
+# and --no-expand keeps it in the line.
+stdin zap.log
+exec logpretty --utc
+cmp stdout want_zap
+stdin zap.log
+exec logpretty --utc --no-expand
+cmp stdout want_zap_flat
+! stderr .
+
+# The time kubectl wrote is the time --where compares.
+stdin stamps.log
+exec logpretty --utc --where 'time>=2026-10-11T12:00:01Z'
+cmp stdout want_stamps
+! stderr .
+
 -- traceback.log --
 {"time":"2026-10-11T12:00:00Z","level":"info","msg":"started"}
 {"time":"2026-10-11T12:00:01Z","level":"error","msg":"request failed"}
@@ -23,3 +56,63 @@ Traceback (most recent call last):
   File "/app/render.py", line 30, in render
     raise ValueError("bad template")
 ValueError: bad template
+-- pod.log --
+[pod/web-1/app] 2026-10-11T12:00:00.000000000Z {"time":"2026-10-11T12:00:00Z","level":"info","msg":"started"}
+[pod/web-1/app] 2026-10-11T12:00:01.000000000Z {"time":"2026-10-11T12:00:01Z","level":"error","msg":"panic"}
+[pod/web-1/app] 2026-10-11T12:00:01.000000000Z goroutine 1 [running]:
+[pod/web-1/app] 2026-10-11T12:00:01.000000000Z main.main()
+[pod/web-1/app] 2026-10-11T12:00:01.000000000Z 	/app/main.go:12 +0x1d
+[pod/web-1/app] {"time":"2026-10-11T12:00:02Z","level":"info","msg":"restarted"}
+-- want_pod --
+[pod/web-1/app] 12:00:00.000 INFO  started
+[pod/web-1/app] 12:00:01.000 ERROR panic
+[pod/web-1/app] 12:00:01.000 goroutine 1 [running]:
+[pod/web-1/app] 12:00:01.000 main.main()
+[pod/web-1/app] 12:00:01.000 	/app/main.go:12 +0x1d
+[pod/web-1/app] 12:00:02.000 INFO  restarted
+-- want_pod_error --
+[pod/web-1/app] 12:00:01.000 ERROR panic
+[pod/web-1/app] 12:00:01.000 goroutine 1 [running]:
+[pod/web-1/app] 12:00:01.000 main.main()
+[pod/web-1/app] 12:00:01.000 	/app/main.go:12 +0x1d
+-- stamps.log --
+2026-10-11T12:00:00.500000000Z {"level":"info","msg":"early"}
+2026-10-11T12:00:00.600000000Z 	at early
+2026-10-11T15:00:01.000000000+03:00 {"level":"info","msg":"on time"}
+2026-10-11T12:00:02.000000000Z level=warn msg=late
+2026-10-11T12:00:02.100000000Z 	at late
+-- want_stamps --
+12:00:01.000 INFO  on time
+12:00:02.000 WARN  late
+12:00:02.100 	at late
+-- compose.log --
+web-1  | {"time":"2026-10-11T12:00:00Z","level":"info","msg":"started"}
+api-1  | {"time":"2026-10-11T12:00:00Z","level":"info","msg":"started"}
+web-1  | {"time":"2026-10-11T12:00:01Z","level":"error","msg":"request failed"}
+web-1  | Traceback (most recent call last):
+api-1  | {"time":"2026-10-11T12:00:01Z","level":"info","msg":"health ok"}
+web-1  |   File "/app/views.py", line 12, in index
+api-1  | GET /health 200
+web-1  |     return render(request, template_name=name, context=ctx)
+web-1  | ValueError: bad template
+api-1  | {"time":"2026-10-11T12:00:02Z","level":"info","msg":"health ok"}
+-- want_compose --
+web-1  | 12:00:01.000 ERROR request failed
+web-1  | Traceback (most recent call last):
+web-1  |   File "/app/views.py", line 12, in index
+web-1  |     return render(request, template_name=name, context=ctx)
+web-1  | ValueError: bad template
+-- zap.log --
+{"level":"error","ts":1791720001.5,"caller":"db/pool.go:88","msg":"query failed","error":"timeout","stacktrace":"main.run\n\t/app/main.go:30\nmain.main\n\t/app/main.go:12"}
+{"level":"info","ts":1791720002,"msg":"next"}
+-- want_zap --
+12:00:01.500 ERROR query failed  caller=db/pool.go:88 error=timeout
+  stacktrace:
+    main.run
+    	/app/main.go:30
+    main.main
+    	/app/main.go:12
+12:00:02.000 INFO  next
+-- want_zap_flat --
+12:00:01.500 ERROR query failed  caller=db/pool.go:88 error=timeout stacktrace=main.run\n\t/app/main.go:30\nmain.main\n\t/app/main.go:12
+12:00:02.000 INFO  next

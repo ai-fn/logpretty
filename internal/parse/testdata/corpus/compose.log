@@ -4,3 +4,9 @@ web-1    | level=info msg=ready port=8080
 worker-2 | 2026-10-11T12:00:00.123456789Z {"level":"warn","msg":"slow"}
 web-1 exited with code 0
 web-1    | 
+web-1    | {"level":"error","msg":"request failed","time":"2026-10-11T12:00:06Z"}
+web-1    | Traceback (most recent call last):
+api-1    | {"level":"info","msg":"api ok","time":"2026-10-11T12:00:06Z"}
+web-1    |   File "/app/views.py", line 12, in index
+web-1    |     return render(request, template_name=name, context=ctx)
+web-1    | ValueError: bad template

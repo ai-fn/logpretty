@@ -3,6 +3,7 @@ package filter
 
 import (
 	"bytes"
+	"cmp"
 	"fmt"
 
 	"github.com/ai-fn/logpretty/internal/entry"
@@ -51,20 +52,45 @@ type Filter struct {
 	Where    []Cond      // conditions an entry must meet, all of them
 	Plain    PlainMode   // what becomes of the plain lines; the zero mode sends them the way of the entry before
 
-	keptLast bool // the decision on the last entry that was not plain
+	keptLast bool           // the decision on the last entry that was not plain
+	sources  map[string]int // the index in kept of a container or pod, so that an update does not allocate
+	kept     []bool         // the decision on the last entry of each source
+	limit    int            // the sources remembered at most; 0 means maxSources, a test sets less
 	finder   parse.Finder
 	scratch  []byte // a value with its escapes decoded
 }
 
-// Keep reports whether to show the entry. A plain line goes the way of the entry before it unless Plain
-// says otherwise: a stack trace is of no use without its error, and noise next to a hidden one.
+// maxSources bounds the sources remembered, so that a stream with a new name on every line cannot grow the memory.
+const maxSources = 1024
+
+// Keep reports whether to show the entry. A plain line goes the way of the entry before it, of its own
+// container or pod if it has one, unless Plain says otherwise: a stack trace is of no use without its error.
 func (f *Filter) Keep(e *entry.Entry) bool {
 	if e.Format == entry.FormatPlain {
-		return f.KeepPlain()
+		return f.KeepPlain(e.Source)
 	}
 	// LevelUnknown is below every level, so an entry without one passes only when none is asked for.
 	f.keptLast = e.Level >= f.MinLevel && f.meets(e)
+	if len(e.Source) > 0 && f.Plain == PlainFollow && f.active() {
+		f.remember(e.Source)
+	}
 	return f.keptLast
+}
+
+// remember records the decision on the last entry for its source; a new source past the limit is not remembered.
+func (f *Filter) remember(source []byte) {
+	if i, ok := f.sources[string(source)]; ok {
+		f.kept[i] = f.keptLast
+		return
+	}
+	if limit := cmp.Or(f.limit, maxSources); len(f.kept) >= limit {
+		return
+	}
+	if f.sources == nil {
+		f.sources = map[string]int{}
+	}
+	f.sources[string(source)] = len(f.kept)
+	f.kept = append(f.kept, f.keptLast)
 }
 
 func (f *Filter) meets(e *entry.Entry) bool {
@@ -89,16 +115,22 @@ func (f *Filter) lookup(e *entry.Entry, c *Cond) (entry.Value, bool) {
 	return entry.Value{}, false
 }
 
-// KeepPlain reports whether to show a line that was not parsed, such as one cut at the length limit: it is
-// a plain line, whatever it was before the cut.
-func (f *Filter) KeepPlain() bool {
+// KeepPlain reports whether to show a plain line of the source, which is nil for none. A line that was not
+// parsed, such as one cut at the length limit, is a plain line without a source, whatever it was before the cut.
+func (f *Filter) KeepPlain(source []byte) bool {
 	switch f.Plain {
 	case PlainShow:
 		return true
 	case PlainHide:
 		return false
 	}
-	return !f.active() || f.keptLast
+	if !f.active() {
+		return true
+	}
+	if i, ok := f.sources[string(source)]; ok {
+		return f.kept[i]
+	}
+	return f.keptLast
 }
 
 // active reports whether any entry can be hidden; if none can, plain lines before the first entry are shown too.
