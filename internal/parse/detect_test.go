@@ -649,6 +649,11 @@ func TestSplitCollector(t *testing.T) {
 		{name: "a timestamp before the name", line: "2026-10-11T12:00:00Z svc | x", wantStamp: "2026-10-11T12:00:00Z", body: "svc | x"},
 		{name: "a name longer than the limit", line: strings.Repeat("s", 254) + " | x", body: strings.Repeat("s", 254) + " | x"},
 		{name: "a name at the limit", line: strings.Repeat("s", 253) + " | x", collector: strings.Repeat("s", 253) + " |", source: strings.Repeat("s", 253), body: "x"},
+		{name: "a name of the length that is scanned byte by byte", line: strings.Repeat("s", 64) + " | x", collector: strings.Repeat("s", 64) + " |", source: strings.Repeat("s", 64), body: "x"},
+		{name: "a name just past it", line: strings.Repeat("s", 65) + " | x", collector: strings.Repeat("s", 65) + " |", source: strings.Repeat("s", 65), body: "x"},
+		{name: "a name that holds a byte of no name past it", line: strings.Repeat("s", 70) + "! | x", body: strings.Repeat("s", 70) + "! | x"},
+		{name: "a long word without a space", line: strings.Repeat("a", 300), body: strings.Repeat("a", 300)},
+		{name: "a word of the length of the short name", line: strings.Repeat("a", 64), body: strings.Repeat("a", 64)},
 		{name: "padding at the limit", line: "s" + strings.Repeat(" ", 253) + "| x", collector: "s" + strings.Repeat(" ", 253) + "|", source: "s", body: "x"},
 		{name: "padding past the limit", line: "s" + strings.Repeat(" ", 254) + "| x", body: "s" + strings.Repeat(" ", 254) + "| x"},
 		{

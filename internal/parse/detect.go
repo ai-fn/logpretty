@@ -14,6 +14,8 @@ const (
 	// maxCollectorName bounds the name of a pod, a container or a service, so that a long word is not walked
 	// to its end on every line.
 	maxCollectorName = 253
+	// shortName is the length of a name that is scanned byte by byte; a longer one is looked at as a whole first.
+	shortName = 64
 	// maxStamp bounds the timestamp of a collector the same way; RFC 3339 with nanoseconds takes 35 bytes.
 	maxStamp = 64
 )
@@ -130,7 +132,15 @@ func podPrefix(line []byte) (n int, name []byte) {
 // composePrefix returns the length of "NAME  |" at the start of line, and the name, if a space or the end of
 // the line follows. docker compose pads every name to the longest one and one space more.
 func composePrefix(line []byte) (n int, name []byte) {
-	end := scanName(line, 0)
+	end := scanNameTo(line, 0, shortName)
+	if end == shortName {
+		// A long word without a space, such as a hex dump, is no prefix: one vectorized search tells. Index 253
+		// is in the window, since a name of 253 bytes may end there.
+		if bytes.IndexByte(line[shortName:min(len(line), maxCollectorName+1)], ' ') < 0 {
+			return 0, nil
+		}
+		end = scanNameTo(line, shortName, maxCollectorName)
+	}
 	// end == 0 guards line[0] on an empty line; a name may hold '.', '_' and '-', but not start with them.
 	if end == 0 || !isAlnum(line[0]) || end == len(line) || line[end] != ' ' {
 		return 0, nil
@@ -149,8 +159,11 @@ func composePrefix(line []byte) (n int, name []byte) {
 }
 
 // scanName returns the end of the name that starts at line[i]: letters, digits, '.', '_' and '-'.
-func scanName(line []byte, i int) int {
-	limit := min(len(line), i+maxCollectorName)
+func scanName(line []byte, i int) int { return scanNameTo(line, i, i+maxCollectorName) }
+
+// scanNameTo is scanName that stops before line[limit].
+func scanNameTo(line []byte, i, limit int) int {
+	limit = min(len(line), limit)
 	for i < limit && nameBytes[line[i]] {
 		i++
 	}

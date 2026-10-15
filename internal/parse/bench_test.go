@@ -34,6 +34,8 @@ func benchLines() []benchLine {
 		{name: "plain-one-pair", line: `Starting server on port=8080 with the configuration read from the environment`},
 		{name: "plain-brace", line: `2026/10/11 12:00:00 config: {Addr::8080 ReadTimeout:30s}`},
 		{name: "plain-1KiB", line: strings.Repeat("x ", 512)},
+		// One word that is no prefix, as in a hex dump: the name of a container must not be scanned to its end.
+		{name: "plain-long-word", line: strings.Repeat("a", 1<<10)},
 		{name: "plain-compose", line: `web-1    |   File "/app/views.py", line 12, in index`},
 		{name: "plain-stamp", line: `[pod/web-1/app] 2026-10-11T12:00:05.000000000Z goroutine 1 [running]:`},
 		{name: "json-kubectl-prefix", line: `[pod/web-1/app] 2026-10-11T12:00:04.000000000Z {"level":"info","msg":"request done","status":200}`},
