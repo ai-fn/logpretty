@@ -19,9 +19,16 @@ func BenchmarkRender(b *testing.B) {
 	}
 	wide.WriteString(`}`)
 
-	lines := []struct{ name, line string }{
+	const stacktrace = `{"time":"2026-10-11T12:00:01.500Z","level":"error","msg":"query failed","caller":"db/pool.go:88","error":"timeout","stacktrace":"main.run\n\t/app/main.go:30\nmain.main\n\t/app/main.go:12"}`
+
+	lines := []struct {
+		name, line string
+		fields     []string // what the fields run chooses instead of the shared list; nil keeps it
+	}{
 		{name: "json-short", line: `{"level":"info","msg":"request done","status":200}`},
 		{name: "json-20-fields", line: wide.String()},
+		// Shown as 6 lines: the stack trace is unfolded under the entry. The shared list has no key of it.
+		{name: "json-stacktrace", line: stacktrace, fields: []string{"msg", "stacktrace"}},
 		{name: "json-escaped-value", line: `{"time":"2026-10-11T12:00:00Z","level":"error","msg":"line one\nline \"two\"","path":"C:\\dir \u00e9"}`},
 		{name: "json-prefix", line: `2026-10-11T12:00:00.123456789Z {"level":"info","msg":"request done","status":200}`},
 		{name: "logfmt", line: `time=2026-10-11T12:00:00Z level=info msg="request done" status=200 path=/api/v1/users duration=1.5s`},
@@ -54,13 +61,31 @@ func BenchmarkRender(b *testing.B) {
 		}
 	}
 
+	// The same stack trace in one line, as --no-expand shows it.
+	b.Run("json-stacktrace/no-expand", func(b *testing.B) {
+		p := parse.Parser{Loc: time.UTC}
+		e := p.Parse([]byte(stacktrace))
+		r := Renderer{Loc: time.UTC, NoExpand: true}
+		dst := r.AppendEntry(nil, e)
+		b.SetBytes(int64(len(stacktrace)))
+		b.ReportAllocs()
+
+		for b.Loop() {
+			dst = r.AppendEntry(dst[:0], e)
+		}
+	})
+
 	// A choice of fields: the first and the last key of the entry, a nested one and one it lacks.
 	fields := Select([]string{"msg", "status", "field15", "http.path", "nope"})
 	for _, tt := range lines {
 		b.Run(tt.name+"/fields", func(b *testing.B) {
 			p := parse.Parser{Loc: time.UTC}
 			e := p.Parse([]byte(tt.line))
-			r := Renderer{Loc: time.UTC, Fields: fields}
+			chosen := fields
+			if tt.fields != nil {
+				chosen = Select(tt.fields)
+			}
+			r := Renderer{Loc: time.UTC, Fields: chosen}
 			dst := r.AppendEntry(nil, e)
 			b.SetBytes(int64(len(tt.line)))
 			b.ReportAllocs()
