@@ -403,7 +403,8 @@ Makefile              # build, test, lint, fuzz, bench, vuln, snapshot, demo
 ## Contributing
 
 Bug reports and pull requests are welcome. Open a pull request against `develop`, and run
-`make check` before you do.
+`make check` before you do. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the details and
+[`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) for how we treat each other.
 
 ## License
 
