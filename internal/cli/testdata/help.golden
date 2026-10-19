@@ -26,8 +26,9 @@ Flags:
                         by commas, with dots for nested ones, as in
                         latency,http.status. The time and the level are shown
                         anyway; so is the message, in its usual place, if msg
-                        is in the list. An entry with none of the fields is
-                        not printed
+                        is in the list, and trace is the trace id, as in an
+                        expression. An entry with none of the fields is not
+                        printed
       --no-time         leave the time out
       --no-expand       keep a value with line breaks, such as a stack trace,
                         in the line of its entry, written out as \n, instead

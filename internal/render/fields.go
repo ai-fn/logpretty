@@ -10,6 +10,7 @@ const (
 	roleMsg
 	roleTime
 	roleLevel
+	roleTrace // the trace id, under whatever key the parser finds it; it has no column
 	roleCount // the length of an array indexed by a role
 )
 
@@ -43,6 +44,8 @@ func Select(names []string) *Selection {
 			field.role, s.time = roleTime, true
 		case "level":
 			field.role, s.level = roleLevel, true
+		case "trace":
+			field.role = roleTrace
 		}
 		s.fields = append(s.fields, field)
 	}

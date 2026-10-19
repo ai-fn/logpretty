@@ -244,9 +244,16 @@ func (r *Renderer) appendSelected(dst []byte, e *entry.Entry, sel *Selection, se
 		if inColumn[f.role] {
 			continue
 		}
-		value, ok := r.finder.Find(e, f.name)
+		var value entry.Value
+		ok := false
+		if f.role == roleTrace {
+			value, _, ok = r.finder.Trace(e)
+		}
+		// Without an id, trace is a field like any other.
 		if !ok {
-			continue
+			if value, ok = r.finder.Find(e, f.name); !ok {
+				continue
+			}
 		}
 		var inLine bool
 		if dst, inLine = r.appendField(dst, sep, f.name, value); inLine {

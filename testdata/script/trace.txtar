@@ -32,6 +32,12 @@ cmp stdout want_prefix
 stderr '^logpretty: invalid value "" for flag -trace: the trace id is empty$'
 ! stdout .
 
+# --fields trace shows the id of every entry under one key.
+stdin input.log
+exec logpretty --utc --fields msg,trace
+cmp stdout want_fields
+! stderr .
+
 -- input.log --
 starting server
 {"time":"2026-10-11T12:00:00Z","level":"info","msg":"request","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","path":"/a"}
@@ -62,3 +68,16 @@ time=2026-10-11T12:00:01Z level=info msg=request traceID=00f067aa0ba902b7 path=/
 -- want_prefix --
 12:00:00.000 INFO  request  trace_id=4bf92f3577b34da6a3ce929d0e0e4736 path=/a
 12:00:04.000 INFO  done  traceId=4bf92f3577b34da6a3ce929d0e0e4736
+-- want_fields --
+starting server
+12:00:00.000 INFO  request  trace=4bf92f3577b34da6a3ce929d0e0e4736
+12:00:01.000 INFO  request  trace=00f067aa0ba902b7
+12:00:02.000 INFO  request  trace=a3ce929d0e0e4736
+12:00:03.000 ERROR query failed  trace=00f067aa0ba902b7
+  at db.go:42
+12:00:04.000 INFO  done  trace=4bf92f3577b34da6a3ce929d0e0e4736
+12:00:05.000 ERROR timeout  trace=a3ce929d0e0e4736
+  at net.go:7
+12:00:06.000 ERROR no id
+  at main.go:1
+12:00:07.000 WARN  retry  trace=00f067aa0ba902b7
