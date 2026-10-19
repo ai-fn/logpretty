@@ -19,8 +19,12 @@ var nestedTraceKeys = [...]struct{ object, key string }{{"trace", "id"}, {"dd", 
 // when nested. The id is valid until the next call of Trace or the next Parse.
 func (f *Finder) Trace(e *entry.Entry) (id entry.Value, field int, ok bool) {
 	best, bestRank := -1, len(traceKeys)
+	nested := false // whether the passes below can find anything: most lines have no such field
 	for i, fl := range e.Fields {
 		switch len(fl.Key) {
+		case len("dd"), len("trace"), len("scopes"):
+			nested = nested || fl.Value.Kind == entry.KindObject || fl.Value.Kind == entry.KindArray
+			continue
 		case len("@tr"), len("traceid"), len("trace_id"), len("dd.trace_id"), len(gcpTraceKey):
 		default:
 			continue
@@ -35,6 +39,9 @@ func (f *Finder) Trace(e *entry.Entry) (id entry.Value, field int, ok bool) {
 	if best >= 0 {
 		id, _ = f.traceText(e.Fields[best].Key, e.Fields[best].Value)
 		return id, best, true
+	}
+	if !nested {
+		return entry.Value{}, -1, false
 	}
 
 	for _, n := range nestedTraceKeys {
