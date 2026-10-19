@@ -67,6 +67,19 @@ func TestAppendEntryFields(t *testing.T) {
 		{name: "a value with an escape", fields: []string{"a"}, line: `{"a":"x\ty \"z\""}`, want: `a="x\ty \"z\""`},
 		{name: "a control character in a name", fields: []string{"a\x1bb"}, line: "{\"a\\u001bb\":1}", want: `a\x1bb=1`},
 
+		{name: "the trace id under its key", fields: []string{"msg", "trace"}, line: `{"level":"info","msg":"x","traceId":"4bf9"}`, want: `INFO  x  trace=4bf9`},
+		{name: "no trace id", fields: []string{"msg", "trace"}, line: `{"level":"info","msg":"x"}`, want: `INFO  x`},
+		{name: "a trace id alone is not there to show", fields: []string{"trace"}, line: `{"level":"info","msg":"x"}`},
+		{name: "a field trace that is not a trace id", fields: []string{"trace"}, line: `{"msg":"x","trace":"at main.go:1"}`, want: `trace="at main.go:1"`},
+		{name: "the trace id wins over a field trace", fields: []string{"trace"}, line: `{"trace":"stack","trace_id":"abc"}`, want: `trace=abc`},
+		{name: "a nested trace id", fields: []string{"trace"}, line: `{"trace":{"id":"abc"}}`, want: `trace=abc`},
+		{name: "a trace id in the scopes of .NET", fields: []string{"trace"}, line: `{"Scopes":["s",{"TraceId":"abc"}]}`, want: `trace=abc`},
+		{name: "the trace and its own key", fields: []string{"trace", "trace_id"}, line: `{"trace_id":"abc"}`, want: `trace=abc trace_id=abc`},
+		{name: "the part of a Google Cloud trace after the last slash", fields: []string{"trace"}, line: `{"logging.googleapis.com/trace":"projects/p/traces/abc"}`, want: `trace=abc`},
+		{name: "a trace id of Datadog, a number", fields: []string{"trace"}, line: `{"dd.trace_id":123}`, want: `trace=123`},
+		{name: "a trace id decoded, in quotes if it needs them", fields: []string{"trace"}, line: `{"trace_id":"a \"b\"\u0063"}`, want: `trace="a \"b\"c"`},
+		{name: "a trace id of logfmt", fields: []string{"trace"}, line: `msg=x traceID=abc`, want: `trace=abc`},
+
 		{name: "logfmt", fields: []string{"path", "msg", "status"}, line: logfmt, want: `15:00:00.000 INFO  request done  path=/x status=200`},
 		{name: "a logfmt word without a value is not a field", fields: []string{"verbose", "a"}, line: `level=info msg=x verbose a=1`, want: `INFO  a=1`},
 		{name: "the prefix of a collector stays", fields: []string{"a"}, line: `web-1 | {"level":"info","msg":"started","a":1}`, want: `web-1 | INFO  a=1`},
@@ -213,10 +226,12 @@ func TestRenderFieldsDoesNotAllocate(t *testing.T) {
 		`svc-1  | {"level":"info","msg":"nothing asked for"}`,
 		`time=2026-10-11T12:00:00Z level=info msg="request \"done\"" status=200 verbose`,
 		`plain text`,
+		`{"level":"info","msg":"x","traceId":"4bf9\u0032f35","trace":{"id":"y"}}`,
+		`{"level":"info","msg":"x","trace":{"id":"4bf9\u0032f35"}}`,
 	}
 	for _, theme := range []Theme{{}, DefaultTheme()} {
 		// The zone is set: the first use of time.Local loads it, which allocates once.
-		r := Renderer{Theme: theme, Loc: testLoc, NoTime: true, Fields: Select([]string{"msg", "http.status", "status", "path", "nope"})}
+		r := Renderer{Theme: theme, Loc: testLoc, NoTime: true, Fields: Select([]string{"msg", "http.status", "status", "path", "nope", "trace"})}
 		dst := make([]byte, 0, 4096)
 		for _, line := range lines {
 			p := parse.Parser{Loc: testLoc}

@@ -1,0 +1,11 @@
+12:00:00.123 INFO  request done  caller=api/handler.go:42 trace_id=4bf92f3577b34da6a3ce929d0e0e4736 span_id=00f067aa0ba902b7 status=200
+12:00:00.123 INFO  request done  trace_id=4bf92f3577b34da6a3ce929d0e0e4736 span_id=00f067aa0ba902b7
+12:00:00.123 INFO  Order 42 created  EventId=0 Category=Api.Orders State={"Message":"Order 42 created","OrderId":42,"{OriginalFormat}":"Order {OrderId} created"} Scopes=[{"Message":"SpanId:00f067aa0ba902b7, TraceId:4bf92f3577b34da6a3ce929d0e0e4736, ParentId:0000000000000000","SpanId":"00f067aa0ba902b7","TraceId":"4bf92f3577b34da6a3ce929d0e0e4736","ParentId":"0000000000000000"},{"Message":"ConnectionId:0HN7","ConnectionId":"0HN7"}]
+12:00:00.123 INFO  request done  ecs.version=1.2.0 service.name=api trace.id=4bf92f3577b34da6a3ce929d0e0e4736 transaction.id=00f067aa0ba902b7
+12:00:00.123 INFO  request done  ecs.version=1.6.0 log={"logger":"app"} trace={"id":"4bf92f3577b34da6a3ce929d0e0e4736"} span={"id":"00f067aa0ba902b7"}
+12:00:00.123 INFO  request done  name=app dd.trace_id=1234567890123456789 dd.span_id=987654321 dd.service=api dd.env=prod
+INFO  request done  dd={"trace_id":"1234567890123456789","span_id":"987654321","service":"api","env":"prod"}
+12:00:00.123 INFO  Order {OrderId} created  @tr=4bf92f3577b34da6a3ce929d0e0e4736 @sp=00f067aa0ba902b7 OrderId=42
+INFO  request done  logging.googleapis.com/trace=projects/my-project/traces/4bf92f3577b34da6a3ce929d0e0e4736 logging.googleapis.com/spanId=00f067aa0ba902b7 logging.googleapis.com/trace_sampled=true
+12:00:00.123 INFO  request done  caller=handler.go:42 traceID=4bf92f3577b34da6a3ce929d0e0e4736
+INFO  started  trace="no id here"

@@ -309,6 +309,91 @@ func TestCondOnMessage(t *testing.T) {
 	}
 }
 
+func TestCondOnTrace(t *testing.T) {
+	tests := []struct {
+		name string
+		line string
+		want map[string]bool
+	}{
+		{
+			name: "trace id under another key",
+			line: `{"msg":"x","traceId":"4bf92f3577b34da6a3ce929d0e0e4736"}`,
+			want: map[string]bool{
+				`trace=4bf92f3577b34da6a3ce929d0e0e4736`: true, `trace="4bf92f3577b34da6a3ce929d0e0e4736"`: true, `trace=4bf9`: false,
+				`trace!=4bf92f3577b34da6a3ce929d0e0e4736`: false, `trace!=4bf9`: true, `trace~^4bf9`: true, `trace!~^4bf9`: false,
+				`trace`: true, `traceId=4bf92f3577b34da6a3ce929d0e0e4736`: true, `"trace"`: false, `"trace"=4bf92f3577b34da6a3ce929d0e0e4736`: false,
+			},
+		},
+		{
+			name: "the case of the id counts",
+			line: `{"TraceId":"4BF92F35"}`,
+			want: map[string]bool{`trace=4BF92F35`: true, `trace=4bf92f35`: false, `trace!=4bf92f35`: true, `trace~^4BF9`: true, `trace~^4bf9`: false},
+		},
+		{
+			name: "a number of Datadog",
+			line: `{"dd.trace_id":1234567890123456789}`,
+			want: map[string]bool{
+				`trace=1234567890123456789`: true, `trace=1234567890123456789.0`: true, `trace="1234567890123456789"`: true,
+				`trace="1234567890123456789.0"`: false, `trace>1`: true, `trace<1`: false, `trace~^123`: true,
+			},
+		},
+		{
+			name: "the part of a Google Cloud trace after the last slash",
+			line: `{"logging.googleapis.com/trace":"projects/p/traces/abc"}`,
+			want: map[string]bool{`trace=abc`: true, `trace~projects`: false, `"logging.googleapis.com/trace"~projects`: true},
+		},
+		{
+			name: "nested",
+			line: `{"trace":{"id":"abc"}}`,
+			want: map[string]bool{`trace=abc`: true, `trace.id=abc`: true, `"trace"~"\"id\""`: true, `"trace"=abc`: false},
+		},
+		{
+			name: "decoded",
+			line: `{"trace_id":"a\u0062c"}`,
+			want: map[string]bool{`trace=abc`: true, `trace="abc"`: true, `trace~^abc$`: true},
+		},
+		{
+			name: "in the scopes of .NET",
+			line: `{"Message":"x","Scopes":["s",{"TraceId":"abc"}]}`,
+			want: map[string]bool{`trace=abc`: true, `trace!=abc`: false, `"trace"`: false},
+		},
+		{
+			name: "logfmt",
+			line: `level=info msg=x traceID=abc`,
+			want: map[string]bool{`trace=abc`: true, `trace!=abc`: false},
+		},
+		{
+			name: "a field trace next to the trace id",
+			line: `{"trace":"stack","trace_id":"abc"}`,
+			want: map[string]bool{`trace=abc`: true, `trace=stack`: false, `"trace"=stack`: true},
+		},
+		{
+			name: "a trace that is not a trace id is a field like any other",
+			line: `{"msg":"x","trace":"at main.go:12"}`,
+			want: map[string]bool{`trace`: true, `trace~main\.go`: true, `trace="at main.go:12"`: true, `trace=x`: false, `"trace"~main`: true},
+		},
+		{
+			name: "an id that is not one",
+			line: `{"msg":"x","trace_id":"","traceId":null}`,
+			want: map[string]bool{`trace`: false, `trace=""`: false, `trace!=""`: true, `trace_id=""`: true},
+		},
+		{
+			name: "no trace id",
+			line: `{"msg":"x"}`,
+			want: map[string]bool{`trace`: false, `trace=x`: false, `trace!=x`: true, `trace~.`: false, `trace!~.`: true},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for expression, want := range tt.want {
+				if got := matches(t, time.UTC, expression, tt.line); got != want {
+					t.Errorf("%s: matched = %v, want %v", expression, got, want)
+				}
+			}
+		})
+	}
+}
+
 func TestCompileErrors(t *testing.T) {
 	tests := []struct {
 		in      string
@@ -331,6 +416,7 @@ func TestCompileErrors(t *testing.T) {
 		{in: "time>yesterday", wantPos: 5, wantMsg: `"yesterday" is not a time`},
 		{in: `time=""`, wantPos: 5, wantMsg: `"" is not a time`},
 		{in: "time<=12:00", wantPos: 6, wantMsg: `"12:00" is not a time`},
+		{in: "trace>4bf9", wantPos: 6, wantMsg: `"4bf9" is not a number`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.in, func(t *testing.T) {
@@ -437,12 +523,16 @@ func TestKeepWithSeveralConditions(t *testing.T) {
 }
 
 func TestKeepWithConditionsDoesNotAllocate(t *testing.T) {
-	expressions := []string{`user_id=42`, `user_id="42"`, `http.status>=500`, `note="say \"hi\""`, `level>=warn`, `time>=2026-10-11T00:00:00Z`, `nope!=1`}
+	expressions := []string{
+		`user_id=42`, `user_id="42"`, `http.status>=500`, `note="say \"hi\""`, `level>=warn`, `time>=2026-10-11T00:00:00Z`, `nope!=1`,
+		`trace=4bf92f35`, `trace="4bf92f35"`, `trace!=1`,
+	}
 	if !raceEnabled {
-		expressions = append(expressions, `msg~slow`, `level~^warn$`, `time~T12:`)
+		expressions = append(expressions, `msg~slow`, `level~^warn$`, `time~T12:`, `trace~^4bf9`)
 	}
 	p := parse.Parser{Loc: time.UTC}
-	e := p.Parse([]byte(`time=2026-10-11T12:00:00Z level=warn msg="slow request" user_id=42 http.status=502 note="say \"hi\""`))
+	// The trace id is escaped, so that the Finder decodes it.
+	e := p.Parse([]byte(`time=2026-10-11T12:00:00Z level=warn msg="slow request" user_id=42 http.status=502 note="say \"hi\"" traceId="4bf9\u0032f35"`))
 
 	for _, expression := range expressions {
 		c, err := Compile(expression, time.UTC)
@@ -455,6 +545,27 @@ func TestKeepWithConditionsDoesNotAllocate(t *testing.T) {
 		}
 		if allocs := testing.AllocsPerRun(100, func() { f.Keep(e) }); allocs != 0 {
 			t.Errorf("%s: Keep allocates %v times per call, want 0", expression, allocs)
+		}
+	}
+
+	// A nested id is looked for in the scratch space of the Finder; without an id, trace is the field.
+	c, err := Compile(`trace=abc`, time.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for line, want := range map[string]bool{
+		`{"msg":"x","trace":{"id":"abc"}}`:                           true,
+		`{"Message":"x","Scopes":["s",{"TraceId":"abc"}]}`:           true,
+		`{"msg":"x","trace":"at main.go:12"}`:                        false,
+		`{"trace":{"span":"x"},"dd":{"k":1},"Scopes":["a",{"x":1}]}`: false,
+	} {
+		other := p.Parse([]byte(line))
+		f := Filter{Where: []Cond{c}}
+		if got := f.Keep(other); got != want {
+			t.Fatalf("trace=abc on %s: kept = %v, want %v", line, got, want)
+		}
+		if allocs := testing.AllocsPerRun(100, func() { f.Keep(other) }); allocs != 0 {
+			t.Errorf("trace=abc on %s: Keep allocates %v times per call, want 0", line, allocs)
 		}
 	}
 }

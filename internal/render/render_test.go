@@ -372,6 +372,9 @@ func TestRenderDoesNotAllocate(t *testing.T) {
 		`{"level":"error","msg":"x","stacktrace":"main.run\n\t/app/main.go:30\r\n\nz","k":1,"exc":"a\nb"}`,
 		"\ufeffplain with \x1b and \xff",
 		``,
+		`{"level":"info","msg":"x","trace_id":"4bf92f35","span_id":"00f0","logging.googleapis.com/trace":"projects/p/traces/a"}`,
+		`level=info msg=x traceID=4bf92f35`,
+		`{"msg":"x","trace":{"id":"4bf92f35"},"Scopes":[{"TraceId":"y"}]}`,
 	}
 	for _, theme := range []Theme{{}, tags, DefaultTheme()} {
 		for _, r := range []Renderer{
@@ -379,6 +382,7 @@ func TestRenderDoesNotAllocate(t *testing.T) {
 			{Theme: theme, Loc: testLoc},
 			{Theme: theme, Loc: testLoc, NoExpand: true},
 			{Theme: theme, Loc: testLoc, Fields: Select([]string{"stacktrace", "exc", "k"})},
+			{Theme: theme, Loc: testLoc, Fields: Select([]string{"msg", "trace", "trace_id", "traceID"})},
 		} {
 			dst := make([]byte, 0, 4096)
 			for _, line := range lines {

@@ -10,6 +10,7 @@ import (
 // safe for concurrent use.
 type Finder struct {
 	scratch []entry.Field // the pairs of the nested objects on the way down
+	text    []byte        // the decoded trace id
 }
 
 // Find returns the value that path names in the entry: a key as it is written, dots and all, or failing

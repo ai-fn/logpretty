@@ -32,6 +32,12 @@ func BenchmarkRender(b *testing.B) {
 		{name: "json-escaped-value", line: `{"time":"2026-10-11T12:00:00Z","level":"error","msg":"line one\nline \"two\"","path":"C:\\dir \u00e9"}`},
 		{name: "json-prefix", line: `2026-10-11T12:00:00.123456789Z {"level":"info","msg":"request done","status":200}`},
 		{name: "logfmt", line: `time=2026-10-11T12:00:00Z level=info msg="request done" status=200 path=/api/v1/users duration=1.5s`},
+		// In color the id is looked up and colored; json-short/color pays for a lookup that finds nothing.
+		{
+			name:   "json-trace",
+			line:   `{"time":"2026-10-11T12:00:00Z","level":"info","msg":"request done","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","span_id":"00f067aa0ba902b7","status":200}`,
+			fields: []string{"msg", "trace"},
+		},
 		// A plain line takes no style: its color row is a control.
 		{name: "plain", line: `2026-10-11 12:00:00 INFO request done in 5ms from 10.0.0.1 for /api/v1/users`},
 	}

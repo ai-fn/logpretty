@@ -258,7 +258,7 @@ func stripStyles(t *testing.T, what string, line []byte, got string) string {
 	t.Helper()
 	th := DefaultTheme()
 	reset := th.Reset
-	styles := append([]string{th.Time, th.Key, th.Prefix, th.Marker}, th.Level[entry.LevelTrace:]...)
+	styles := slices.Concat([]string{th.Time, th.Key, th.Prefix, th.Marker}, th.Level[entry.LevelTrace:], th.Traces)
 	var text strings.Builder
 	rest, ok := strings.CutSuffix(got, "\n")
 	if !ok {
@@ -323,6 +323,14 @@ func FuzzRender(f *testing.F) {
 	for _, seed := range []string{
 		`{"msg":"m","stack":"a\n\tb\r\nc\n","k":"x\ny","n":"z\n"}`, `level=error msg=x stack="a\nb\u001b" k=1`,
 		`{"time":"2026-10-11T12:00:00Z","s":"\n\n"}`, `{"a b":"x\n\u2028y","\u001b":"p\nq"}`,
+	} {
+		f.Add([]byte(seed), uint32(0))
+	}
+	// Trace ids under each kind of key, beside a span id, empty, and with a line break.
+	for _, seed := range []string{
+		`{"msg":"x","trace_id":"4bf9","span_id":"00f0"}`, `level=info msg=x traceID=4bf9`, `{"dd.trace_id":123,"@tr":"a b"}`,
+		`{"trace":{"id":"x"},"Scopes":["s",{"TraceId":"y"}]}`, `{"logging.googleapis.com/trace":"projects/p/traces/"}`,
+		`{"trace_id":"","trace_id":"a\nb","traceId":"c\u001b"}`, `{"trace":"stack","trace_id":"4bf9"}`,
 	} {
 		f.Add([]byte(seed), uint32(0))
 	}
@@ -406,7 +414,7 @@ func FuzzRender(f *testing.F) {
 		}
 
 		// A choice of fields and a hidden time: names that are roles, names the seeds have, and two of the entry's own.
-		names := []string{"msg", "nope", "a", "http.a", "level", "status", "time"}
+		names := []string{"msg", "nope", "a", "http.a", "level", "status", "time", "trace", "trace_id"}
 		for i := 0; i < len(e.Fields) && i < 2; i++ {
 			names = append(names, string(e.Fields[i].Key))
 		}

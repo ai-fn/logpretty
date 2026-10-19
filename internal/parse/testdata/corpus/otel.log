@@ -1,0 +1,11 @@
+{"level":"info","ts":1791720000.123,"caller":"api/handler.go:42","msg":"request done","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","span_id":"00f067aa0ba902b7","status":200}
+{"time":"2026-10-11T12:00:00.123Z","level":"INFO","msg":"request done","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","span_id":"00f067aa0ba902b7"}
+{"Timestamp":"2026-10-11T12:00:00.123Z","EventId":0,"LogLevel":"Information","Category":"Api.Orders","Message":"Order 42 created","State":{"Message":"Order 42 created","OrderId":42,"{OriginalFormat}":"Order {OrderId} created"},"Scopes":[{"Message":"SpanId:00f067aa0ba902b7, TraceId:4bf92f3577b34da6a3ce929d0e0e4736, ParentId:0000000000000000","SpanId":"00f067aa0ba902b7","TraceId":"4bf92f3577b34da6a3ce929d0e0e4736","ParentId":"0000000000000000"},{"Message":"ConnectionId:0HN7","ConnectionId":"0HN7"}]}
+{"@timestamp":"2026-10-11T12:00:00.123Z","log.level":"INFO","message":"request done","ecs.version":"1.2.0","service.name":"api","trace.id":"4bf92f3577b34da6a3ce929d0e0e4736","transaction.id":"00f067aa0ba902b7"}
+{"@timestamp":"2026-10-11T12:00:00.123Z","log.level":"info","message":"request done","ecs.version":"1.6.0","log":{"logger":"app"},"trace":{"id":"4bf92f3577b34da6a3ce929d0e0e4736"},"span":{"id":"00f067aa0ba902b7"}}
+{"asctime":"2026-10-11 12:00:00,123","levelname":"INFO","name":"app","message":"request done","dd.trace_id":"1234567890123456789","dd.span_id":"987654321","dd.service":"api","dd.env":"prod"}
+{"dd":{"trace_id":"1234567890123456789","span_id":"987654321","service":"api","env":"prod"},"level":"info","message":"request done"}
+{"@t":"2026-10-11T12:00:00.1230000Z","@mt":"Order {OrderId} created","@tr":"4bf92f3577b34da6a3ce929d0e0e4736","@sp":"00f067aa0ba902b7","OrderId":42}
+{"severity":"INFO","message":"request done","logging.googleapis.com/trace":"projects/my-project/traces/4bf92f3577b34da6a3ce929d0e0e4736","logging.googleapis.com/spanId":"00f067aa0ba902b7","logging.googleapis.com/trace_sampled":true}
+level=info ts=2026-10-11T12:00:00.123Z caller=handler.go:42 msg="request done" traceID=4bf92f3577b34da6a3ce929d0e0e4736
+{"level":"info","msg":"started","trace":"no id here"}

@@ -10,6 +10,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -269,6 +270,32 @@ func TestRun(t *testing.T) {
 	}
 }
 
+// The Linux console knows no 256 colors: trace ids get the basic ones there. Which color an id gets is tested in render.
+func TestRunTraceColors(t *testing.T) {
+	const in = `{"msg":"x","trace_id":"4bf9"}` + "\n"
+	tests := []struct {
+		name, term string
+		palette    []string
+	}{
+		{name: "256 colors", term: "xterm-256color", palette: render.DefaultTheme().Traces},
+		{name: "no TERM", palette: render.DefaultTheme().Traces},
+		{name: "the Linux console", term: "linux", palette: render.BasicTracePalette()},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("TERM", tt.term)
+			var stdout, stderr bytes.Buffer
+			if code := Run(t.Context(), []string{"--color=always"}, strings.NewReader(in), &stdout, &stderr); code != 0 {
+				t.Fatalf("exit code = %d, want 0 (stderr: %q)", code, stderr.String())
+			}
+			out := stdout.String()
+			if !slices.ContainsFunc(tt.palette, func(c string) bool { return out == "x  \x1b[2mtrace_id=\x1b[0m"+c+"4bf9\x1b[0m\n" }) {
+				t.Errorf("stdout = %q, want the id in one of the colors %q", out, tt.palette)
+			}
+		})
+	}
+}
+
 // The shape of a failure: one line, or two for an expression, then the hint. The arguments are tested in internal/cli.
 func TestRunArgumentErrors(t *testing.T) {
 	tests := []struct {
@@ -285,6 +312,7 @@ func TestRunArgumentErrors(t *testing.T) {
 		{name: "control characters in an argument", args: []string{"--\x1b[31m"}, want: `flag provided but not defined: -\x1b[31m`},
 		{name: "plain of an unknown kind", args: []string{"--plain", "all"}, want: `invalid value "all" for flag -plain: invalid plain mode "all": want follow, show or hide`},
 		{name: "fields with a name left out", args: []string{"--fields", "a,,b"}, want: `invalid value "a,,b" for flag -fields: a field has no name; the names are separated by commas, as in msg,latency`},
+		{name: "trace with no id", args: []string{"--trace="}, want: `invalid value "" for flag -trace: the trace id is empty`},
 		{name: "where expression", args: []string{"--where", "user_id=>42"}, want: "--where 'user_id=>42'\n" + strings.Repeat(" ", 28) + "^ unexpected '>'"},
 		{
 			name: "control characters in a where expression",

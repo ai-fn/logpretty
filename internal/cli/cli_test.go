@@ -57,6 +57,11 @@ func TestParse(t *testing.T) {
 			want: Config{MaxLine: 3, UTC: true, Color: term.ColorAlways},
 		},
 		{name: "utc turned off", args: []string{"--utc=false"}, want: defaults},
+		{
+			name: "trace given twice, as typed",
+			args: []string{"--trace", "4bf92f35", "-trace= Abc "},
+			want: Config{MaxLine: linereader.DefaultMaxLine, Traces: [][]byte{[]byte("4bf92f35"), []byte(" Abc ")}},
+		},
 		{name: "color auto", args: []string{"--color=auto"}, want: defaults},
 		{
 			name: "the last of a repeated flag wins",
@@ -128,6 +133,9 @@ func TestParse(t *testing.T) {
 		{name: "plain with an empty value", args: []string{"--plain="}, wantErr: `invalid plain mode ""`},
 		{name: "plain without its value", args: []string{"--plain"}, wantErr: "flag needs an argument: -plain"},
 		{name: "where without its value", args: []string{"--where"}, wantErr: "flag needs an argument: -where"},
+		{name: "trace with an empty value", args: []string{"--trace="}, wantErr: `invalid value "" for flag -trace: the trace id is empty`},
+		{name: "a good trace does not hide an empty one after it", args: []string{"--trace", "a", "--trace", ""}, wantErr: `invalid value "" for flag -trace`},
+		{name: "trace without its value", args: []string{"--trace"}, wantErr: "flag needs an argument: -trace"},
 		{name: "an unknown flag wins over a where before it", args: []string{"--where", "a=>1", "--nope"}, wantErr: "flag provided but not defined: -nope"},
 		{name: "where wins over a positional argument", args: []string{"--where", "a=>1", "file.log"}, wantErr: `invalid value "a=>1" for flag -where: unexpected '>'`},
 		{name: "where without quotes around its spaces", args: []string{"--where", "a", "=", "1"}, wantErr: `unexpected argument "="`},

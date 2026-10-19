@@ -1,0 +1,11 @@
+\e[2m12:00:00.123\e[0m \e[32mINFO\e[0m  request done  \e[2mcaller=\e[0mapi/handler.go:42 \e[2mtrace_id=\e[0m\e[38;5;201m4bf92f3577b34da6a3ce929d0e0e4736\e[0m \e[2mspan_id=\e[0m00f067aa0ba902b7 \e[2mstatus=\e[0m200
+\e[2m12:00:00.123\e[0m \e[32mINFO\e[0m  request done  \e[2mtrace_id=\e[0m\e[38;5;201m4bf92f3577b34da6a3ce929d0e0e4736\e[0m \e[2mspan_id=\e[0m00f067aa0ba902b7
+\e[2m12:00:00.123\e[0m \e[32mINFO\e[0m  Order 42 created  \e[2mEventId=\e[0m0 \e[2mCategory=\e[0mApi.Orders \e[2mState=\e[0m{"Message":"Order 42 created","OrderId":42,"{OriginalFormat}":"Order {OrderId} created"} \e[2mScopes=\e[0m[{"Message":"SpanId:00f067aa0ba902b7, TraceId:4bf92f3577b34da6a3ce929d0e0e4736, ParentId:0000000000000000","SpanId":"00f067aa0ba902b7","TraceId":"4bf92f3577b34da6a3ce929d0e0e4736","ParentId":"0000000000000000"},{"Message":"ConnectionId:0HN7","ConnectionId":"0HN7"}]
+\e[2m12:00:00.123\e[0m \e[32mINFO\e[0m  request done  \e[2mecs.version=\e[0m1.2.0 \e[2mservice.name=\e[0mapi \e[2mtrace.id=\e[0m\e[38;5;201m4bf92f3577b34da6a3ce929d0e0e4736\e[0m \e[2mtransaction.id=\e[0m00f067aa0ba902b7
+\e[2m12:00:00.123\e[0m \e[32mINFO\e[0m  request done  \e[2mecs.version=\e[0m1.6.0 \e[2mlog=\e[0m{"logger":"app"} \e[2mtrace=\e[0m{"id":"4bf92f3577b34da6a3ce929d0e0e4736"} \e[2mspan=\e[0m{"id":"00f067aa0ba902b7"}
+\e[2m12:00:00.123\e[0m \e[32mINFO\e[0m  request done  \e[2mname=\e[0mapp \e[2mdd.trace_id=\e[0m\e[38;5;171m1234567890123456789\e[0m \e[2mdd.span_id=\e[0m987654321 \e[2mdd.service=\e[0mapi \e[2mdd.env=\e[0mprod
+\e[32mINFO\e[0m  request done  \e[2mdd=\e[0m{"trace_id":"1234567890123456789","span_id":"987654321","service":"api","env":"prod"}
+\e[2m12:00:00.123\e[0m \e[32mINFO\e[0m  Order {OrderId} created  \e[2m@tr=\e[0m\e[38;5;201m4bf92f3577b34da6a3ce929d0e0e4736\e[0m \e[2m@sp=\e[0m00f067aa0ba902b7 \e[2mOrderId=\e[0m42
+\e[32mINFO\e[0m  request done  \e[2mlogging.googleapis.com/trace=\e[0m\e[38;5;201mprojects/my-project/traces/4bf92f3577b34da6a3ce929d0e0e4736\e[0m \e[2mlogging.googleapis.com/spanId=\e[0m00f067aa0ba902b7 \e[2mlogging.googleapis.com/trace_sampled=\e[0mtrue
+\e[2m12:00:00.123\e[0m \e[32mINFO\e[0m  request done  \e[2mcaller=\e[0mhandler.go:42 \e[2mtraceID=\e[0m\e[38;5;201m4bf92f3577b34da6a3ce929d0e0e4736\e[0m
+\e[32mINFO\e[0m  started  \e[2mtrace=\e[0m"no id here"

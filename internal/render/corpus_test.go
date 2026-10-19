@@ -74,7 +74,7 @@ func TestCorpus(t *testing.T) {
 					// Clipped, so that a read past the end of the line panics instead of finding spare capacity.
 					got = r.AppendEntry(got, p.Parse(slices.Clip(line)))
 				}
-				if tt.theme == (Theme{}) {
+				if tt.theme.Reset == "" {
 					if bytes.IndexByte(got, 0x1b) >= 0 {
 						t.Fatalf("the output without color has an escape character: %q", got)
 					}
