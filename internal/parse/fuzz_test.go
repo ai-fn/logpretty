@@ -755,3 +755,133 @@ func FuzzFind(f *testing.F) {
 		}
 	})
 }
+
+// referenceTrace is the obvious Trace: encoding/json and strings.EqualFold over the same keys.
+// field is the index of the pair at the top level, or -1.
+func referenceTrace(t *testing.T, object []byte) (id string, number bool, field int, found, unsure bool) {
+	t.Helper()
+	fields, ok := referenceJSONFields(t, object)
+	if !ok {
+		return "", false, -1, false, false
+	}
+	// usable returns the id a value holds; unsure when encoding/json would replace bad UTF-8 in it.
+	usable := func(key, value string) (id string, number, ok, unsure bool) {
+		if strings.HasPrefix(value, `"`) {
+			var s string
+			if err := json.Unmarshal([]byte(value), &s); err != nil {
+				t.Fatalf("encoding/json cannot read %s: %v", value, err)
+			}
+			if strings.EqualFold(key, gcpTraceKey) {
+				s = s[strings.LastIndex(s, "/")+1:]
+			}
+			return s, false, s != "", !utf8.ValidString(s) || strings.ContainsRune(s, utf8.RuneError)
+		}
+		number = value != "" && (value[0] == '-' || '0' <= value[0] && value[0] <= '9')
+		return value, number, number, false
+	}
+	// Unicode folds "ſ" to "s" and the Kelvin sign to "k"; the keys are ASCII and so is the folding of Trace.
+	fold := func(key, lower string) bool {
+		return strings.EqualFold(key, lower) && !strings.ContainsAny(key, "ſ\u212a")
+	}
+	inObject := func(object, key string) (id string, number, ok, unsure bool) {
+		inner, _ := referenceJSONFields(t, []byte(object))
+		for _, f := range inner {
+			if fold(f.key, key) {
+				if id, number, ok, unsure := usable(f.key, f.value); ok {
+					return id, number, true, unsure
+				}
+			}
+		}
+		return "", false, false, false
+	}
+
+	for _, k := range traceKeys {
+		for i, f := range fields {
+			if fold(f.key, k) {
+				if id, number, ok, unsure := usable(f.key, f.value); ok {
+					return id, number, i, true, unsure
+				}
+			}
+		}
+	}
+	for _, n := range nestedTraceKeys {
+		for _, f := range fields {
+			if fold(f.key, n.object) && strings.HasPrefix(f.value, "{") {
+				if id, number, ok, unsure := inObject(f.value, n.key); ok {
+					return id, number, -1, true, unsure
+				}
+			}
+		}
+	}
+	for _, f := range fields {
+		if !fold(f.key, "scopes") || !strings.HasPrefix(f.value, "[") {
+			continue
+		}
+		var scopes []json.RawMessage
+		if err := json.Unmarshal([]byte(f.value), &scopes); err != nil {
+			t.Fatalf("encoding/json cannot read %s: %v", f.value, err)
+		}
+		for _, s := range scopes {
+			if s[0] == '{' {
+				if id, number, ok, unsure := inObject(string(s), "traceid"); ok {
+					return id, number, -1, true, unsure
+				}
+			}
+		}
+	}
+	return "", false, -1, false, false
+}
+
+func FuzzTrace(f *testing.F) {
+	for _, s := range []string{
+		`{"msg":"x","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736"}`,
+		`{"traceId":"b","trace_id":"a","TraceID":"c"}`,
+		`{"trace_id":null,"trace.id":"","dd.trace_id":123,"@tr":"x"}`,
+		`{"logging.googleapis.com/trace":"projects\/p\/traces\/abc"}`,
+		`{"logging.googleapis.com/trace":"projects/p/traces/","@tr":"a\u0062"}`,
+		`{"trace":{"id":null,"ID":"a"},"dd":{"trace_id":1}}`,
+		`{"Scopes":["s",1,true,null,[{"TraceId":"x"}],{"Message":"m","TraceId":"abc"}]}`,
+		`{"scopes":[ { "traceid" : "" } , { "TRACEID" : 5 } ]}`,
+		`{"trace\u005fid":"a","tr\u0061ce":{"id":"b"}}`,
+		`{"dd":{"trace\u005fid":"b"},"Scopes":[{"Trace\u0049d":"c"}]}`,
+		"{\"trace_id\":\"\xff\"}",
+		`web-1 | {"trace_id":"abc"}`,
+		`level=info msg=x traceID=abc trace_id`,
+		`plain text`,
+		``,
+	} {
+		f.Add([]byte(s))
+	}
+
+	var used Finder
+	f.Fuzz(func(t *testing.T, line []byte) {
+		// Clipped, so that a read past the end panics instead of finding spare capacity.
+		line = slices.Clip(slices.Clone(line))
+		p := Parser{Loc: time.UTC}
+		e := p.Parse(line)
+
+		var fresh Finder
+		id, field, ok := fresh.Trace(e)
+		got := string(id.Raw)
+		if again, fieldAgain, okAgain := used.Trace(e); string(again.Raw) != got || again.Kind != id.Kind || fieldAgain != field || okAgain != ok {
+			t.Fatalf("Trace(%q) = %q, %d, %v with a new Finder; %q, %d, %v with a used one", line, got, field, ok, again.Raw, fieldAgain, okAgain)
+		}
+		wantKind := entry.KindString
+		if !ok {
+			wantKind = entry.KindNone
+		} else if id.Kind == entry.KindNumber {
+			wantKind = entry.KindNumber
+		}
+		if ok != (got != "") || id.Kind != wantKind || id.Escaped || field < -1 || field >= len(e.Fields) || !ok && field != -1 {
+			t.Fatalf("Trace(%q) = %q (%v, escaped %v), %d, %v", line, got, id.Kind, id.Escaped, field, ok)
+		}
+
+		if e.Format != entry.FormatJSON {
+			return
+		}
+		want, number, wantField, wantOK, unsure := referenceTrace(t, e.Body)
+		if ok != wantOK || field != wantField || ok && (id.Kind == entry.KindNumber) != number || !unsure && got != want {
+			t.Fatalf("Trace(%q) = %q (%v), %d, %v; encoding/json gives %q (number %v), %d, %v", line, got, id.Kind, field, ok, want, number, wantField, wantOK)
+		}
+	})
+}

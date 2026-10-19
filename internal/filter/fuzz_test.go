@@ -1,7 +1,9 @@
 package filter
 
 import (
+	"bytes"
 	"cmp"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -168,6 +170,10 @@ func FuzzKeep(f *testing.F) {
 		`{"level":"bogus","time":"yesterday","msg":42,"big":9007199254740993,"ok":true,"err":null,"code":"042"}`,
 		`web-1 | {"severity":"ERROR","message":"failed"}`, `{}`, `plain text`, ``,
 		"msg=x a=\xff",
+		`{"msg":"x","trace":"stack","traceId":"4bf92f35","trace_id":null}`,
+		`{"dd.trace_id":1234567890123456789,"logging.googleapis.com/trace":"projects/p/traces/abc"}`,
+		`{"trace":{"id":"a \"b\""}}`, `level=info msg=x traceID=4bf92f35`, `{"trace_id":"4BF92F35","msg":"x"}`,
+		`{"Scopes":[{"TraceId":"4bf92f35"}]}`, `{"logging.googleapis.com/trace":"projects/p/traces/abc"}`, `trace=stack msg=x`,
 	}
 	for _, seed := range [][2]string{
 		{"user_id", "42"},
@@ -192,6 +198,11 @@ func FuzzKeep(f *testing.F) {
 		{"msg", "("},
 		{"a", "\ufffd"},
 		{"a", "\xff"},
+		{"trace", "4bf92f35"},
+		{"trace", "^4bf9"},
+		{"trace", "1234567890123456789.0"},
+		{"trace", "abc"},
+		{"trace", "stack"},
 	} {
 		for _, line := range lines {
 			f.Add([]byte(line), seed[0], seed[1])
@@ -202,12 +213,15 @@ func FuzzKeep(f *testing.F) {
 		// Clipped, so that a read past the end panics instead of finding spare capacity.
 		line = slices.Clip(slices.Clone(line))
 		p := parse.Parser{Loc: time.UTC}
-		if p.Parse(line).Format == entry.FormatPlain {
+		parsed := p.Parse(line)
+		if parsed.Format == entry.FormatPlain {
 			return // a plain line is not asked about its fields
 		}
+		// Taken before keep parses the line again and the entry goes stale.
+		refLine, refKey, refOK := traceReference(line, parsed)
 
-		// keep compiles the expression and asks about the line; ok is false if it does not compile.
-		keep := func(expression string) (kept, ok bool) {
+		// keepOn compiles the expression and asks about the line; ok is false if it does not compile.
+		keepOn := func(on []byte, expression string) (kept, ok bool) {
 			c, err := Compile(expression, time.UTC)
 			if err != nil {
 				var syntax *SyntaxError
@@ -217,17 +231,41 @@ func FuzzKeep(f *testing.F) {
 				return false, false
 			}
 			fresh := Filter{Where: []Cond{c}}
-			kept = fresh.Keep(p.Parse(line))
+			kept = fresh.Keep(p.Parse(on))
 
 			// A Filter that has seen other entries must decide the same.
 			used := Filter{Where: []Cond{c}}
 			for _, other := range []string{`{"a":"x \" y","b":{"c":{"d":1}}}`, `a=1 b="x \" y"`, `text`} {
 				used.Keep(p.Parse([]byte(other)))
 			}
-			if got := used.Keep(p.Parse(line)); got != kept {
-				t.Fatalf("%s on %q: %v with a new Filter, %v with a used one", expression, line, kept, got)
+			if got := used.Keep(p.Parse(on)); got != kept {
+				t.Fatalf("%s on %q: %v with a new Filter, %v with a used one", expression, on, kept, got)
 			}
 			return kept, true
+		}
+		keep := func(expression string) (kept, ok bool) { return keepOn(line, expression) }
+
+		if refOK {
+			rests := []string{""}
+			for _, v := range []string{quoteToken(value), value} {
+				for _, operator := range []string{"=", "!=", ">", ">=", "<", "<=", "~", "!~"} {
+					rests = append(rests, operator+v)
+				}
+			}
+			for _, rest := range rests {
+				got, okGot := keep("trace" + rest)
+				want, okWant := keepOn(refLine, refKey+rest)
+				if okGot != okWant || got != want {
+					t.Fatalf("%q: trace%s gives %v (compiles %v); %s%s on %q gives %v (compiles %v)", line, rest, got, okGot, refKey, rest, refLine, want, okWant)
+				}
+			}
+		}
+
+		// --trace ID is --where 'trace="ID"'.
+		want, ok := keep("trace=" + quoteToken(value))
+		traced := Filter{Traces: [][]byte{[]byte(value)}}
+		if got := traced.Keep(p.Parse(line)); !ok || got != want {
+			t.Fatalf("%q: Traces %q gives %v, trace=%s gives %v (compiles %v)", line, value, got, quoteToken(value), want, ok)
 		}
 
 		// A key in quotes is a field of that name; a bare one may be a role. Both are tried.
@@ -309,6 +347,28 @@ func FuzzKeep(f *testing.F) {
 			}
 		}
 	})
+}
+
+// traceReference returns a line and a key in quotes that must decide as the key trace on the entry: the field
+// trace when there is no id, the field of the id, or else a line of the id alone. An id that is not UTF-8 has no reference.
+func traceReference(line []byte, e *entry.Entry) (refLine []byte, refKey string, ok bool) {
+	var finder parse.Finder
+	id, field, found := finder.Trace(e)
+	if !found {
+		return line, quoteToken("trace"), true
+	}
+	// Elsewhere the quoted key misses the id: it is nested, cut out of a Google Cloud path, or behind an earlier field.
+	if field >= 0 && !strings.EqualFold(string(e.Fields[field].Key), "logging.googleapis.com/trace") {
+		key := e.Fields[field].Key
+		if !slices.ContainsFunc(e.Fields[:field], func(fl entry.Field) bool { return fl.Value.Kind != entry.KindNone && bytes.Equal(fl.Key, key) }) {
+			return line, quoteToken(string(key)), true
+		}
+	}
+	if !utf8.Valid(id.Raw) {
+		return nil, "", false // encoding/json would write U+FFFD in its place
+	}
+	text, _ := json.Marshal(string(id.Raw)) // a string always marshals
+	return slices.Clip(append(append([]byte(`{"x":`), text...), '}')), `"x"`, true
 }
 
 // FuzzKeepSources plays a stream of entries and plain lines of a few sources against a model of the rule:

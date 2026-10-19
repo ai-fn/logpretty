@@ -14,9 +14,10 @@ func BenchmarkKeep(b *testing.B) {
 		`"http":{"method":"GET","path":"/api/v1/users","status":502},"note":"say \"hi\"","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736"}`
 
 	tests := []struct {
-		name  string
-		level entry.Level
-		where []string
+		name   string
+		level  entry.Level
+		where  []string
+		traces []string
 	}{
 		{name: "no-filter"},
 		{name: "level", level: entry.LevelWarn},
@@ -29,10 +30,17 @@ func BenchmarkKeep(b *testing.B) {
 		{name: "missing", where: []string{"nope!=1"}},
 		{name: "time", where: []string{"time>=2026-10-11T00:00:00Z"}},
 		{name: "target-command", level: entry.LevelWarn, where: []string{"user_id=42"}},
+		// The id is the last of 11 fields. With both flags it is looked up twice.
+		{name: "trace-flag", traces: []string{"00f067aa0ba902b7", "4bf92f3577b34da6a3ce929d0e0e4736"}},
+		{name: "trace-where", where: []string{`trace="4bf92f3577b34da6a3ce929d0e0e4736"`}},
+		{name: "trace-both", where: []string{"trace~^4bf9"}, traces: []string{"4bf92f3577b34da6a3ce929d0e0e4736"}},
 	}
 	for _, tt := range tests {
 		b.Run(tt.name, func(b *testing.B) {
 			f := Filter{MinLevel: tt.level}
+			for _, trace := range tt.traces {
+				f.Traces = append(f.Traces, []byte(trace))
+			}
 			for _, expression := range tt.where {
 				c, err := Compile(expression, time.UTC)
 				if err != nil {

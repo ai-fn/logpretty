@@ -3,6 +3,7 @@ exec logpretty --help
 stdout '^Usage: logpretty \[flags\] < input$'
 stdout '^      --level LEVEL '
 stdout '^      --where EXPR '
+stdout '^      --trace ID '
 stdout '^      --plain MODE '
 stdout '^      --fields LIST '
 stdout '^      --no-time '

@@ -44,6 +44,14 @@ func dumpEntry(b *strings.Builder, n int, line []byte, e *entry.Entry) {
 		return string(e.Fields[i].Key)
 	}
 	fmt.Fprintf(b, "  roles: time=%s level=%s msg=%s\n", key(e.TimeField()), key(e.LevelField()), key(e.MsgField()))
+	var f Finder
+	if id, i, ok := f.Trace(e); ok {
+		where := "nested"
+		if i >= 0 {
+			where = fmt.Sprintf("in %q", e.Fields[i].Key)
+		}
+		fmt.Fprintf(b, "  trace: <%s>%q %s\n", id.Kind, id.Raw, where)
+	}
 	if len(e.Prefix) > 0 {
 		fmt.Fprintf(b, "  prefix: %q\n", e.Prefix)
 	}

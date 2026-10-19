@@ -41,7 +41,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	p := &pipeline{
 		r:      linereader.New(stdin, cfg.MaxLine),
 		w:      bufio.NewWriterSize(stdout, writeBufferSize),
-		filter: filter.Filter{MinLevel: cfg.Level, Where: cfg.Where, Plain: cfg.Plain},
+		filter: filter.Filter{MinLevel: cfg.Level, Where: cfg.Where, Traces: cfg.Traces, Plain: cfg.Plain},
 	}
 	p.renderer.NoTime, p.renderer.NoExpand, p.renderer.Fields = cfg.NoTime, cfg.NoExpand, render.Select(cfg.Fields)
 	if cfg.UTC {
@@ -51,6 +51,10 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	// stdout itself is asked, not the buffer in front of it: only the file knows whether it is a terminal.
 	if term.UseColor(cfg.Color, stdout, os.Getenv) {
 		p.renderer.Theme = render.DefaultTheme()
+		// The Linux console turns the 256 colors into its 16, the colors of the levels among them.
+		if os.Getenv("TERM") == "linux" {
+			p.renderer.Theme.Traces = render.BasicTracePalette()
+		}
 	}
 	// A read from stdin cannot be interrupted, so the pipeline runs aside and is abandoned on cancel.
 	done := make(chan error, 1)

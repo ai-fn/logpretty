@@ -22,6 +22,7 @@ const (
 	roleMsg
 	roleLevel
 	roleTime
+	roleTrace
 )
 
 // Cond is one compiled condition: a key, an operator and a value that has been given its type.
@@ -97,6 +98,8 @@ func roleOf(key string) role {
 		return roleLevel
 	case "time":
 		return roleTime
+	case "trace":
+		return roleTrace
 	}
 	return roleNone
 }
@@ -134,6 +137,11 @@ func (c *Cond) match(e *entry.Entry, f *Filter) bool {
 		return c.matchValue(entry.Value{Raw: e.Stamp, Kind: entry.KindString}, f)
 	case c.role == roleMsg && e.MsgField() >= 0:
 		return c.matchValue(e.Fields[e.MsgField()].Value, f)
+	case c.role == roleTrace:
+		// No id: leave the switch and look up a field named trace.
+		if id, _, ok := f.finder.Trace(e); ok {
+			return c.matchValue(id, f)
+		}
 	case typed && (c.role == roleLevel || c.role == roleTime):
 		// A field of that name which is not a level or a time has nothing to compare.
 		return c.op == opNe
