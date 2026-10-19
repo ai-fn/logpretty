@@ -51,6 +51,10 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	// stdout itself is asked, not the buffer in front of it: only the file knows whether it is a terminal.
 	if term.UseColor(cfg.Color, stdout, os.Getenv) {
 		p.renderer.Theme = render.DefaultTheme()
+		// The Linux console turns the 256 colors into its 16, the colors of the levels among them.
+		if os.Getenv("TERM") == "linux" {
+			p.renderer.Theme.Traces = render.BasicTracePalette()
+		}
 	}
 	// A read from stdin cannot be interrupted, so the pipeline runs aside and is abandoned on cancel.
 	done := make(chan error, 1)

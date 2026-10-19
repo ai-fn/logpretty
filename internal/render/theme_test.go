@@ -1,6 +1,8 @@
 package render
 
 import (
+	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -27,10 +29,18 @@ func TestDefaultTheme(t *testing.T) {
 		Prefix: faint,
 		Marker: "\x1b[33m",
 		Reset:  reset,
+		Traces: []string{
+			"\x1b[38;5;168m", "\x1b[38;5;130m", "\x1b[38;5;31m", "\x1b[38;5;33m", "\x1b[38;5;27m", "\x1b[38;5;104m",
+			"\x1b[38;5;99m", "\x1b[38;5;171m", "\x1b[38;5;128m", "\x1b[38;5;133m", "\x1b[38;5;201m", "\x1b[38;5;162m",
+		},
 	}
 
-	if got := DefaultTheme(); got != want {
+	if got := DefaultTheme(); !reflect.DeepEqual(got, want) {
 		t.Errorf("DefaultTheme() = %q, want %q", got, want)
+	}
+	// Blue and magenta: cyan and green are the levels debug and info.
+	if got, want := BasicTracePalette(), []string{"\x1b[34m", "\x1b[35m", "\x1b[94m", "\x1b[95m"}; !slices.Equal(got, want) {
+		t.Errorf("BasicTracePalette() = %q, want %q", got, want)
 	}
 }
 

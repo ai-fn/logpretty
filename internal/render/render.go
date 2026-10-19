@@ -30,6 +30,9 @@ type Renderer struct {
 	formatter
 	finder parse.Finder
 	blocks []block // the values to unfold under the entry being rendered
+	// The trace id of the entry being rendered, while there are colors for it: its field, -1 if nested or none.
+	traceField int
+	traceColor string
 }
 
 // block is a field whose value is unfolded under its entry.
@@ -48,6 +51,12 @@ func (r *Renderer) AppendEntry(dst []byte, e *entry.Entry) []byte {
 	start := len(dst)
 	clear(r.blocks) // the slices of the last entry are not kept alive
 	r.blocks = r.blocks[:0]
+	r.traceField, r.traceColor = -1, ""
+	if len(r.Theme.Traces) > 0 {
+		if id, field, ok := r.finder.Trace(e); ok {
+			r.traceField, r.traceColor = field, r.Theme.traceStyle(id.Raw)
+		}
+	}
 	// The separator is written before a part, not after it, so that a part the entry lacks leaves no spaces behind.
 	dst, sep := r.appendCollector(dst, e)
 
@@ -153,17 +162,21 @@ func (r *Renderer) appendAll(dst []byte, e *entry.Entry, sep string, msg int) ([
 			dst, sep = AppendInline(append(dst, sep...), f.Key), " "
 			continue
 		}
+		style := ""
+		if i == r.traceField {
+			style = r.traceColor
+		}
 		var inLine bool
-		if dst, inLine = r.appendField(dst, sep, f.Key, f.Value); inLine {
+		if dst, inLine = r.appendField(dst, sep, f.Key, f.Value, style); inLine {
 			sep = " "
 		}
 	}
 	return dst, found
 }
 
-// appendField appends key=value, or keeps a value with line breaks for a block under the entry and reports
-// that nothing was appended.
-func (r *Renderer) appendField(dst []byte, sep string, key []byte, v entry.Value) (out []byte, inLine bool) {
+// appendField appends key=value, the value in style, or keeps a value with line breaks for a block under the entry
+// and reports that nothing was appended.
+func (r *Renderer) appendField(dst []byte, sep string, key []byte, v entry.Value, style string) (out []byte, inLine bool) {
 	var text []byte
 	// A line break can only come from an escape, and a value with escapes is decoded to be shown anyway.
 	decoded := v.Kind == entry.KindString && v.Escaped
@@ -175,10 +188,13 @@ func (r *Renderer) appendField(dst []byte, sep string, key []byte, v entry.Value
 	}
 	th := &r.Theme
 	dst = append(appendKey(append(append(dst, sep...), th.Key...), key), '=')
-	if dst = th.end(dst, th.Key); decoded {
-		return appendText(dst, text, " \""), true
+	dst = append(th.end(dst, th.Key), style...)
+	if decoded {
+		dst = appendText(dst, text, " \"")
+	} else {
+		dst = r.appendValue(dst, v)
 	}
-	return r.appendValue(dst, v), true
+	return th.end(dst, style), true
 }
 
 // hasInnerBreak reports a line feed before the last byte: one at the very end does not make a second line.
@@ -245,7 +261,7 @@ func (r *Renderer) appendSelected(dst []byte, e *entry.Entry, sel *Selection, se
 			continue
 		}
 		var value entry.Value
-		ok := false
+		ok, style := false, r.traceColor
 		if f.role == roleTrace {
 			value, _, ok = r.finder.Trace(e)
 		}
@@ -254,14 +270,30 @@ func (r *Renderer) appendSelected(dst []byte, e *entry.Entry, sel *Selection, se
 			if value, ok = r.finder.Find(e, f.name); !ok {
 				continue
 			}
+			if !findsField(e, f.name, r.traceField) {
+				style = ""
+			}
 		}
 		var inLine bool
-		if dst, inLine = r.appendField(dst, sep, f.name, value); inLine {
+		if dst, inLine = r.appendField(dst, sep, f.name, value, style); inLine {
 			sep = " "
 		}
 		found = true
 	}
 	return dst, found
+}
+
+// findsField reports whether Finder.Find takes name to field i: a top-level key comes first, the first of equal ones.
+func findsField(e *entry.Entry, name []byte, i int) bool {
+	if i < 0 || !bytes.Equal(e.Fields[i].Key, name) {
+		return false
+	}
+	for _, f := range e.Fields[:i] {
+		if f.Value.Kind != entry.KindNone && bytes.Equal(f.Key, name) {
+			return false
+		}
+	}
+	return true
 }
 
 // AppendTruncated appends a line that was cut at the length limit, as it is, with a note of the bytes dropped.
