@@ -41,7 +41,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	p := &pipeline{
 		r:      linereader.New(stdin, cfg.MaxLine),
 		w:      bufio.NewWriterSize(stdout, writeBufferSize),
-		filter: filter.Filter{MinLevel: cfg.Level, Where: cfg.Where, Plain: cfg.Plain},
+		filter: filter.Filter{MinLevel: cfg.Level, Where: cfg.Where, Traces: cfg.Traces, Plain: cfg.Plain},
 	}
 	p.renderer.NoTime, p.renderer.NoExpand, p.renderer.Fields = cfg.NoTime, cfg.NoExpand, render.Select(cfg.Fields)
 	if cfg.UTC {

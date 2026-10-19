@@ -24,6 +24,7 @@ type Config struct {
 	Color    term.ColorMode
 	Level    entry.Level   // the lowest level to show; LevelUnknown shows every entry
 	Where    []filter.Cond // conditions an entry must meet to be shown, all of them
+	Traces   [][]byte      // the trace ids of the entries to show, any of them
 	Plain    filter.PlainMode
 	Fields   []string // the fields to show, as they were asked for; nil shows them all
 	NoTime   bool
@@ -47,13 +48,17 @@ Flags:
       --where EXPR      show the entries that meet the expression, see below.
                         Given twice, it asks for both. By default the plain
                         lines after a hidden entry are hidden too, see --plain
+      --trace ID        show the entries of this trace: those whose id, as the
+                        key trace finds it (see below), is ID as a whole.
+                        Given twice, it shows both traces. The start of an id
+                        is found with --where 'trace~^4bf9'
       --plain MODE      what to do with the lines that are not entries, such
                         as a stack trace: follow (the default), show or hide.
-                        Under --level or --where, follow shows a line only
-                        after an entry that is shown: of the same container
-                        or pod, when the lines carry its name (docker
-                        compose, kubectl logs --prefix); hide hides every
-                        such line even when nothing is filtered
+                        Under --level, --where or --trace, follow shows a
+                        line only after an entry that is shown: of the same
+                        container or pod, when the lines carry its name
+                        (docker compose, kubectl logs --prefix); hide hides
+                        every such line even when nothing is filtered
       --fields LIST     show only these fields, in this order: keys separated
                         by commas, with dots for nested ones, as in
                         latency,http.status. The time and the level are shown
@@ -88,9 +93,13 @@ Expressions:
   The spaces around an operator may be left out. A value with a space goes in
   double quotes, inside the shell's single quotes:
     --where 'msg="connection refused"'
-  A key with dots looks into nested objects: http.status. The keys msg, level
-  and time stand for the message, the level and the time of an entry whatever
-  its own keys are. A level is compared by its severity and a time as a
+  A key with dots looks into nested objects: http.status. The keys msg, level,
+  time and trace stand for the message, the level, the time and the trace id
+  of an entry whatever its own keys are. trace finds the keys trace_id,
+  traceId, trace.id, dd.trace_id, @tr and that of Google Cloud (the part after
+  its last /) in any letter case, then trace.id and dd.trace_id in nested
+  objects and TraceId in the Scopes of .NET; an entry with none has trace as a
+  field like any other. A level is compared by its severity and a time as a
   moment, in quotes or not: level>=warn, time>=2026-10-11T12:00:00Z. A time
   without a zone is local, or UTC with --utc.
 
@@ -99,6 +108,7 @@ Examples:
   kubectl logs -f pod | logpretty --level warn
   kubectl logs -f pod | logpretty --where 'status>=500' --where 'path~^/api/'
   kubectl logs -f pod | logpretty --level error --plain hide
+  kubectl logs -f pod | logpretty --trace 4bf92f3577b34da6a3ce929d0e0e4736
   kubectl logs -f pod | logpretty --fields msg,latency --no-time
   docker compose logs -f | logpretty --utc
   logpretty --color=always < app.log | less -R
@@ -184,6 +194,13 @@ func newFlagSet(f *flags) *flag.FlagSet {
 	fs.BoolVar(&f.NoExpand, "no-expand", f.NoExpand, "")
 	fs.Func("where", "", func(s string) error {
 		f.exprs = append(f.exprs, s)
+		return nil
+	})
+	fs.Func("trace", "", func(s string) error {
+		if s == "" {
+			return errors.New("the trace id is empty")
+		}
+		f.Traces = append(f.Traces, []byte(s))
 		return nil
 	})
 	fs.BoolVar(&f.version, "version", false, "")

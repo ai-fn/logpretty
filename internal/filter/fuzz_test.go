@@ -173,7 +173,7 @@ func FuzzKeep(f *testing.F) {
 		`{"msg":"x","trace":"stack","traceId":"4bf92f35","trace_id":null}`,
 		`{"dd.trace_id":1234567890123456789,"logging.googleapis.com/trace":"projects/p/traces/abc"}`,
 		`{"trace":{"id":"a \"b\""}}`, `level=info msg=x traceID=4bf92f35`, `{"trace_id":"4BF92F35","msg":"x"}`,
-		`{"Scopes":[{"TraceId":"4bf92f35"}]}`, `{"logging.googleapis.com/trace":"projects/p/traces/abc"}`,
+		`{"Scopes":[{"TraceId":"4bf92f35"}]}`, `{"logging.googleapis.com/trace":"projects/p/traces/abc"}`, `trace=stack msg=x`,
 	}
 	for _, seed := range [][2]string{
 		{"user_id", "42"},
@@ -259,6 +259,13 @@ func FuzzKeep(f *testing.F) {
 					t.Fatalf("%q: trace%s gives %v (compiles %v); %s%s on %q gives %v (compiles %v)", line, rest, got, okGot, refKey, rest, refLine, want, okWant)
 				}
 			}
+		}
+
+		// --trace ID is --where 'trace="ID"'.
+		want, ok := keep("trace=" + quoteToken(value))
+		traced := Filter{Traces: [][]byte{[]byte(value)}}
+		if got := traced.Keep(p.Parse(line)); !ok || got != want {
+			t.Fatalf("%q: Traces %q gives %v, trace=%s gives %v (compiles %v)", line, value, got, quoteToken(value), want, ok)
 		}
 
 		// A key in quotes is a field of that name; a bare one may be a role. Both are tried.

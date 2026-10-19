@@ -1,0 +1,64 @@
+# --trace keeps the entries of one trace under any key the trace key finds, or with no id by the field trace;
+# a plain line goes the way of the entry before it, and the banner before the first entry is hidden.
+stdin input.log
+exec logpretty --utc --trace 00f067aa0ba902b7
+cmp stdout want_one
+! stderr .
+
+stdin input.log
+exec logpretty --utc --trace 4bf92f3577b34da6a3ce929d0e0e4736 --trace a3ce929d0e0e4736
+cmp stdout want_two
+! stderr .
+
+# With --level, an entry must meet both.
+stdin input.log
+exec logpretty --utc --level error --trace 4bf92f3577b34da6a3ce929d0e0e4736 --trace a3ce929d0e0e4736
+cmp stdout want_level
+! stderr .
+
+# The id must match whole; its start is found with --where.
+stdin input.log
+exec logpretty --utc --trace 4bf9
+! stdout .
+! stderr .
+
+stdin input.log
+exec logpretty --utc --where 'trace~^4bf9'
+cmp stdout want_prefix
+! stderr .
+
+# An empty id is a mistake in the arguments.
+! exec logpretty --trace=
+stderr '^logpretty: invalid value "" for flag -trace: the trace id is empty$'
+! stdout .
+
+-- input.log --
+starting server
+{"time":"2026-10-11T12:00:00Z","level":"info","msg":"request","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","path":"/a"}
+time=2026-10-11T12:00:01Z level=info msg=request traceID=00f067aa0ba902b7 path=/b
+{"@t":"2026-10-11T12:00:02Z","@mt":"request","@tr":"a3ce929d0e0e4736","path":"/c"}
+{"time":"2026-10-11T12:00:03Z","level":"error","msg":"query failed","trace":{"id":"00f067aa0ba902b7"}}
+  at db.go:42
+{"time":"2026-10-11T12:00:04Z","level":"info","msg":"done","traceId":"4bf92f3577b34da6a3ce929d0e0e4736"}
+{"time":"2026-10-11T12:00:05Z","level":"error","msg":"timeout","dd.trace_id":"a3ce929d0e0e4736"}
+  at net.go:7
+{"time":"2026-10-11T12:00:06Z","level":"error","msg":"no id"}
+  at main.go:1
+{"time":"2026-10-11T12:00:07Z","level":"warn","msg":"retry","trace":"00f067aa0ba902b7"}
+-- want_one --
+12:00:01.000 INFO  request  traceID=00f067aa0ba902b7 path=/b
+12:00:03.000 ERROR query failed  trace={"id":"00f067aa0ba902b7"}
+  at db.go:42
+12:00:07.000 WARN  retry  trace=00f067aa0ba902b7
+-- want_two --
+12:00:00.000 INFO  request  trace_id=4bf92f3577b34da6a3ce929d0e0e4736 path=/a
+12:00:02.000 INFO  request  @tr=a3ce929d0e0e4736 path=/c
+12:00:04.000 INFO  done  traceId=4bf92f3577b34da6a3ce929d0e0e4736
+12:00:05.000 ERROR timeout  dd.trace_id=a3ce929d0e0e4736
+  at net.go:7
+-- want_level --
+12:00:05.000 ERROR timeout  dd.trace_id=a3ce929d0e0e4736
+  at net.go:7
+-- want_prefix --
+12:00:00.000 INFO  request  trace_id=4bf92f3577b34da6a3ce929d0e0e4736 path=/a
+12:00:04.000 INFO  done  traceId=4bf92f3577b34da6a3ce929d0e0e4736

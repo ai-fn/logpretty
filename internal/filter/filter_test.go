@@ -57,6 +57,98 @@ func TestKeepByLevel(t *testing.T) {
 	}
 }
 
+func TestKeepByTrace(t *testing.T) {
+	const (
+		aInfo  = `{"level":"info","msg":"start","trace_id":"aaa"}`
+		aError = `level=error msg=failed traceID=aaa`
+		bInfo  = `{"level":"info","msg":"start","traceId":"bbb","user_id":42}`
+		bError = `{"level":"error","msg":"failed","trace":{"id":"bbb"}}`
+		cInfo  = `{"level":"info","msg":"start","dd.trace_id":123}`
+		field  = `{"level":"error","msg":"no id","trace":"aaa"}`
+		upper  = `{"level":"info","msg":"start","trace_id":"AAA"}`
+		noID   = `{"level":"error","msg":"no id"}`
+		web    = `web-1  | {"trace_id":"aaa","msg":"x"}`
+		api    = `api-1  | {"trace_id":"bbb","msg":"y"}`
+	)
+	stream := []string{
+		"banner", aInfo, bInfo, "  at b.go:1", aError, "  at a.go:2", cInfo, bError, cut + "long",
+		field, "  at f.go:3", upper, noID, "tail",
+	}
+	traces := func(ids ...string) [][]byte {
+		out := make([][]byte, 0, len(ids))
+		for _, id := range ids {
+			out = append(out, []byte(id))
+		}
+		return out
+	}
+	where := func(expression string) []Cond {
+		c, err := Compile(expression, time.UTC)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return []Cond{c}
+	}
+
+	tests := []struct {
+		name  string
+		f     Filter
+		lines []string // the stream above if nil
+		want  []string
+	}{
+		{
+			name: "one trace, whatever its key, with its plain lines",
+			f:    Filter{Traces: traces("aaa")},
+			want: []string{aInfo, aError, "  at a.go:2", field, "  at f.go:3"},
+		},
+		{
+			name: "two traces: an entry of either",
+			f:    Filter{Traces: traces("aaa", "bbb")},
+			want: []string{aInfo, bInfo, "  at b.go:1", aError, "  at a.go:2", bError, cut + "long", field, "  at f.go:3"},
+		},
+		{name: "a number is matched by its text", f: Filter{Traces: traces("123")}, want: []string{cInfo}},
+		{name: "not as a number", f: Filter{Traces: traces("123.0")}},
+		{name: "not by a prefix", f: Filter{Traces: traces("aa")}},
+		{name: "not by a part", f: Filter{Traces: traces("aaaa", "a")}},
+		{name: "not in another case", f: Filter{Traces: traces("AAA")}, want: []string{upper}},
+		{
+			name: "and the level",
+			f:    Filter{MinLevel: entry.LevelError, Traces: traces("aaa", "bbb")},
+			want: []string{aError, "  at a.go:2", bError, cut + "long", field, "  at f.go:3"},
+		},
+		{
+			name: "and the conditions",
+			f:    Filter{Traces: traces("aaa", "bbb"), Where: where("user_id=42")},
+			want: []string{bInfo, "  at b.go:1"},
+		},
+		{
+			name: "a trace that nothing has hides the plain lines too",
+			f:    Filter{Traces: traces("zzz")},
+		},
+		{
+			name: "plain lines are shown when asked",
+			f:    Filter{Traces: traces("bbb"), Plain: PlainShow},
+			want: []string{"banner", bInfo, "  at b.go:1", "  at a.go:2", bError, cut + "long", "  at f.go:3", "tail"},
+		},
+		{
+			name:  "a plain line follows the entry of its source",
+			f:     Filter{Traces: traces("aaa")},
+			lines: []string{web, api, "web-1  | at x", "api-1  | at y"},
+			want:  []string{web, "web-1  | at x"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lines := tt.lines
+			if lines == nil {
+				lines = stream
+			}
+			if got := kept(&tt.f, lines...); !slices.Equal(got, tt.want) {
+				t.Errorf("kept\n %q\nwant\n %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestKeepReadsTheLevelTheParserFound(t *testing.T) {
 	tests := []struct {
 		name string
@@ -283,6 +375,24 @@ func TestKeepDoesNotAllocate(t *testing.T) {
 		f.KeepPlain([]byte("unknown"))
 	}); allocs != 0 {
 		t.Errorf("Keep allocates %v times per call, want 0", allocs)
+	}
+
+	traced := Filter{Traces: [][]byte{[]byte("zzz"), []byte("4bf92f35")}}
+	e = p.Parse([]byte(`level=warn msg=slow trace_id=4bf92f35`))
+	if !traced.Keep(e) {
+		t.Fatal("the entry of a trace asked for is hidden")
+	}
+	if allocs := testing.AllocsPerRun(100, func() { traced.Keep(e) }); allocs != 0 {
+		t.Errorf("Keep with traces allocates %v times per call, want 0", allocs)
+	}
+	// Without an id, the field trace is decoded into the scratch space.
+	e = p.Parse([]byte(`level=warn msg=slow trace="a \"b\""`))
+	traced.Traces = [][]byte{[]byte(`a "b"`)}
+	if !traced.Keep(e) {
+		t.Fatal("the entry with the field trace asked for is hidden")
+	}
+	if allocs := testing.AllocsPerRun(100, func() { traced.Keep(e) }); allocs != 0 {
+		t.Errorf("Keep with traces and the field trace allocates %v times per call, want 0", allocs)
 	}
 }
 

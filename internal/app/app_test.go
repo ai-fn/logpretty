@@ -285,6 +285,7 @@ func TestRunArgumentErrors(t *testing.T) {
 		{name: "control characters in an argument", args: []string{"--\x1b[31m"}, want: `flag provided but not defined: -\x1b[31m`},
 		{name: "plain of an unknown kind", args: []string{"--plain", "all"}, want: `invalid value "all" for flag -plain: invalid plain mode "all": want follow, show or hide`},
 		{name: "fields with a name left out", args: []string{"--fields", "a,,b"}, want: `invalid value "a,,b" for flag -fields: a field has no name; the names are separated by commas, as in msg,latency`},
+		{name: "trace with no id", args: []string{"--trace="}, want: `invalid value "" for flag -trace: the trace id is empty`},
 		{name: "where expression", args: []string{"--where", "user_id=>42"}, want: "--where 'user_id=>42'\n" + strings.Repeat(" ", 28) + "^ unexpected '>'"},
 		{
 			name: "control characters in a where expression",

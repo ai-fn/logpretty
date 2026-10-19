@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"cmp"
 	"fmt"
+	"slices"
 
 	"github.com/ai-fn/logpretty/internal/entry"
 	"github.com/ai-fn/logpretty/internal/parse"
@@ -50,6 +51,7 @@ func ParsePlainMode(s string) (PlainMode, error) {
 type Filter struct {
 	MinLevel entry.Level // the lowest level to keep; LevelUnknown keeps entries of any level and of none
 	Where    []Cond      // conditions an entry must meet, all of them
+	Traces   [][]byte    // the trace ids to keep, any of them; nil keeps an entry of any trace and of none
 	Plain    PlainMode   // what becomes of the plain lines; the zero mode sends them the way of the entry before
 
 	keptLast bool           // the decision on the last entry that was not plain
@@ -70,7 +72,7 @@ func (f *Filter) Keep(e *entry.Entry) bool {
 		return f.KeepPlain(e.Source)
 	}
 	// LevelUnknown is below every level, so an entry without one passes only when none is asked for.
-	f.keptLast = e.Level >= f.MinLevel && f.meets(e)
+	f.keptLast = e.Level >= f.MinLevel && f.onTrace(e) && f.meets(e)
 	if len(e.Source) > 0 && f.Plain == PlainFollow && f.active() {
 		f.remember(e.Source)
 	}
@@ -91,6 +93,25 @@ func (f *Filter) remember(source []byte) {
 	}
 	f.sources[string(source)] = len(f.kept)
 	f.kept = append(f.kept, f.keptLast)
+}
+
+// onTrace reports whether the entry belongs to one of the traces asked for, by the exact text of its id. As in
+// --where 'trace="ID"', an entry without an id is matched by its field trace.
+func (f *Filter) onTrace(e *entry.Entry) bool {
+	if len(f.Traces) == 0 {
+		return true
+	}
+	id, _, ok := f.finder.Trace(e)
+	if !ok {
+		if id, ok = f.finder.Find(e, []byte("trace")); !ok {
+			return false
+		}
+		if id.Escaped {
+			f.scratch = id.AppendText(f.scratch[:0])
+			id.Raw = f.scratch
+		}
+	}
+	return slices.ContainsFunc(f.Traces, func(trace []byte) bool { return bytes.Equal(id.Raw, trace) })
 }
 
 func (f *Filter) meets(e *entry.Entry) bool {
@@ -135,5 +156,5 @@ func (f *Filter) KeepPlain(source []byte) bool {
 
 // active reports whether any entry can be hidden; if none can, plain lines before the first entry are shown too.
 func (f *Filter) active() bool {
-	return f.MinLevel > entry.LevelUnknown || len(f.Where) > 0
+	return f.MinLevel > entry.LevelUnknown || len(f.Where) > 0 || len(f.Traces) > 0
 }
