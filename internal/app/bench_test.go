@@ -22,6 +22,10 @@ func BenchmarkRun(b *testing.B) {
 			"api-1  | GET /health 200\n" +
 			"web-1  | ValueError: bad template"
 		stacktrace = `{"level":"error","msg":"query failed","error":"timeout","stacktrace":"main.run\n\t/app/main.go:30\nmain.main\n\t/app/main.go:12"}`
+		// Three requests at once, their ids under three keys.
+		otel = `{"level":"info","msg":"request","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","path":"/a"}` + "\n" +
+			`{"level":"info","msg":"request","traceId":"00f067aa0ba902b7","path":"/b"}` + "\n" +
+			`level=info msg=request traceID=a3ce929d0e0e4736 path=/c`
 	)
 	tests := []struct {
 		name string
@@ -43,6 +47,9 @@ func BenchmarkRun(b *testing.B) {
 		// With --level error the plain lines follow the entries of their own container: 4 of the 6 are shown.
 		{name: "compose-trace", line: compose, out: 6},
 		{name: "compose-trace-level", args: []string{"--level", "error"}, line: compose, out: 4},
+		// --trace keeps one request of the three.
+		{name: "otel-bare", line: otel},
+		{name: "otel-trace", args: []string{"--trace", "00f067aa0ba902b7"}, line: otel, out: 1},
 	}
 
 	for _, tt := range tests {

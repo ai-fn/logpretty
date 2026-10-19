@@ -107,3 +107,37 @@ func BenchmarkFind(b *testing.B) {
 		})
 	}
 }
+
+// A miss is what every line without an id pays when trace ids are colored.
+func BenchmarkTrace(b *testing.B) {
+	var wide string
+	for _, tt := range benchLines() {
+		if tt.name == "json-20-fields" {
+			wide = tt.line
+		}
+	}
+	tests := []struct{ name, line string }{
+		{name: "miss-short", line: `{"level":"info","msg":"request done","status":200}`},
+		{name: "miss-20-fields", line: wide},
+		{name: "last-of-6", line: `{"time":"2026-10-11T12:00:00Z","level":"info","msg":"request done","span_id":"00f067aa0ba902b7","status":200,"trace_id":"4bf92f3577b34da6a3ce929d0e0e4736"}`},
+		{name: "nested", line: `{"level":"info","msg":"request done","trace":{"id":"4bf92f3577b34da6a3ce929d0e0e4736"},"span":{"id":"00f067aa0ba902b7"}}`},
+		{name: "scopes", line: `{"LogLevel":"Information","Message":"done","Scopes":[{"Message":"SpanId:00f0","SpanId":"00f0","TraceId":"4bf92f3577b34da6a3ce929d0e0e4736"}]}`},
+		{name: "google-cloud", line: `{"severity":"INFO","message":"done","logging.googleapis.com/trace":"projects/p/traces/4bf92f3577b34da6a3ce929d0e0e4736"}`},
+	}
+	for _, tt := range tests {
+		b.Run(tt.name, func(b *testing.B) {
+			p := Parser{Loc: time.UTC}
+			e := p.Parse([]byte(tt.line))
+			var f Finder
+			want := !strings.HasPrefix(tt.name, "miss")
+			if _, _, ok := f.Trace(e); ok != want { // grows the scratch space once
+				b.Fatalf("Trace found an id: %v, want %v", ok, want)
+			}
+			b.ReportAllocs()
+
+			for b.Loop() {
+				f.Trace(e)
+			}
+		})
+	}
+}
