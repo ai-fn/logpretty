@@ -1,0 +1,138 @@
+line 1: json
+  in: "{\"level\":\"info\",\"ts\":1791720000.123,\"caller\":\"api/handler.go:42\",\"msg\":\"request done\",\"trace_id\":\"4bf92f3577b34da6a3ce929d0e0e4736\",\"span_id\":\"00f067aa0ba902b7\",\"status\":200}"
+  level: info
+  time: 2026-10-11T12:00:00.123Z
+  roles: time=ts level=level msg=msg
+  trace: <string>"4bf92f3577b34da6a3ce929d0e0e4736" in "trace_id"
+  fields:
+    "level"=<string>"info"
+    "ts"=<number>"1791720000.123"
+    "caller"=<string>"api/handler.go:42"
+    "msg"=<string>"request done"
+    "trace_id"=<string>"4bf92f3577b34da6a3ce929d0e0e4736"
+    "span_id"=<string>"00f067aa0ba902b7"
+    "status"=<number>"200"
+line 2: json
+  in: "{\"time\":\"2026-10-11T12:00:00.123Z\",\"level\":\"INFO\",\"msg\":\"request done\",\"trace_id\":\"4bf92f3577b34da6a3ce929d0e0e4736\",\"span_id\":\"00f067aa0ba902b7\"}"
+  level: info
+  time: 2026-10-11T12:00:00.123Z
+  roles: time=time level=level msg=msg
+  trace: <string>"4bf92f3577b34da6a3ce929d0e0e4736" in "trace_id"
+  fields:
+    "time"=<string>"2026-10-11T12:00:00.123Z"
+    "level"=<string>"INFO"
+    "msg"=<string>"request done"
+    "trace_id"=<string>"4bf92f3577b34da6a3ce929d0e0e4736"
+    "span_id"=<string>"00f067aa0ba902b7"
+line 3: json
+  in: "{\"Timestamp\":\"2026-10-11T12:00:00.123Z\",\"EventId\":0,\"LogLevel\":\"Information\",\"Category\":\"Api.Orders\",\"Message\":\"Order 42 created\",\"State\":{\"Message\":\"Order 42 created\",\"OrderId\":42,\"{OriginalFormat}\":\"Order {OrderId} created\"},\"Scopes\":[{\"Message\":\"SpanId:00f067aa0ba902b7, TraceId:4bf92f3577b34da6a3ce929d0e0e4736, ParentId:0000000000000000\",\"SpanId\":\"00f067aa0ba902b7\",\"TraceId\":\"4bf92f3577b34da6a3ce929d0e0e4736\",\"ParentId\":\"0000000000000000\"},{\"Message\":\"ConnectionId:0HN7\",\"ConnectionId\":\"0HN7\"}]}"
+  level: info
+  time: 2026-10-11T12:00:00.123Z
+  roles: time=Timestamp level=LogLevel msg=Message
+  trace: <string>"4bf92f3577b34da6a3ce929d0e0e4736" nested
+  fields:
+    "Timestamp"=<string>"2026-10-11T12:00:00.123Z"
+    "EventId"=<number>"0"
+    "LogLevel"=<string>"Information"
+    "Category"=<string>"Api.Orders"
+    "Message"=<string>"Order 42 created"
+    "State"=<object>"{\"Message\":\"Order 42 created\",\"OrderId\":42,\"{OriginalFormat}\":\"Order {OrderId} created\"}"
+    "Scopes"=<array>"[{\"Message\":\"SpanId:00f067aa0ba902b7, TraceId:4bf92f3577b34da6a3ce929d0e0e4736, ParentId:0000000000000000\",\"SpanId\":\"00f067aa0ba902b7\",\"TraceId\":\"4bf92f3577b34da6a3ce929d0e0e4736\",\"ParentId\":\"0000000000000000\"},{\"Message\":\"ConnectionId:0HN7\",\"ConnectionId\":\"0HN7\"}]"
+line 4: json
+  in: "{\"@timestamp\":\"2026-10-11T12:00:00.123Z\",\"log.level\":\"INFO\",\"message\":\"request done\",\"ecs.version\":\"1.2.0\",\"service.name\":\"api\",\"trace.id\":\"4bf92f3577b34da6a3ce929d0e0e4736\",\"transaction.id\":\"00f067aa0ba902b7\"}"
+  level: info
+  time: 2026-10-11T12:00:00.123Z
+  roles: time=@timestamp level=log.level msg=message
+  trace: <string>"4bf92f3577b34da6a3ce929d0e0e4736" in "trace.id"
+  fields:
+    "@timestamp"=<string>"2026-10-11T12:00:00.123Z"
+    "log.level"=<string>"INFO"
+    "message"=<string>"request done"
+    "ecs.version"=<string>"1.2.0"
+    "service.name"=<string>"api"
+    "trace.id"=<string>"4bf92f3577b34da6a3ce929d0e0e4736"
+    "transaction.id"=<string>"00f067aa0ba902b7"
+line 5: json
+  in: "{\"@timestamp\":\"2026-10-11T12:00:00.123Z\",\"log.level\":\"info\",\"message\":\"request done\",\"ecs.version\":\"1.6.0\",\"log\":{\"logger\":\"app\"},\"trace\":{\"id\":\"4bf92f3577b34da6a3ce929d0e0e4736\"},\"span\":{\"id\":\"00f067aa0ba902b7\"}}"
+  level: info
+  time: 2026-10-11T12:00:00.123Z
+  roles: time=@timestamp level=log.level msg=message
+  trace: <string>"4bf92f3577b34da6a3ce929d0e0e4736" nested
+  fields:
+    "@timestamp"=<string>"2026-10-11T12:00:00.123Z"
+    "log.level"=<string>"info"
+    "message"=<string>"request done"
+    "ecs.version"=<string>"1.6.0"
+    "log"=<object>"{\"logger\":\"app\"}"
+    "trace"=<object>"{\"id\":\"4bf92f3577b34da6a3ce929d0e0e4736\"}"
+    "span"=<object>"{\"id\":\"00f067aa0ba902b7\"}"
+line 6: json
+  in: "{\"asctime\":\"2026-10-11 12:00:00,123\",\"levelname\":\"INFO\",\"name\":\"app\",\"message\":\"request done\",\"dd.trace_id\":\"1234567890123456789\",\"dd.span_id\":\"987654321\",\"dd.service\":\"api\",\"dd.env\":\"prod\"}"
+  level: info
+  time: 2026-10-11T12:00:00.123Z
+  roles: time=asctime level=levelname msg=message
+  trace: <string>"1234567890123456789" in "dd.trace_id"
+  fields:
+    "asctime"=<string>"2026-10-11 12:00:00,123"
+    "levelname"=<string>"INFO"
+    "name"=<string>"app"
+    "message"=<string>"request done"
+    "dd.trace_id"=<string>"1234567890123456789"
+    "dd.span_id"=<string>"987654321"
+    "dd.service"=<string>"api"
+    "dd.env"=<string>"prod"
+line 7: json
+  in: "{\"dd\":{\"trace_id\":\"1234567890123456789\",\"span_id\":\"987654321\",\"service\":\"api\",\"env\":\"prod\"},\"level\":\"info\",\"message\":\"request done\"}"
+  level: info
+  time: -
+  roles: time=- level=level msg=message
+  trace: <string>"1234567890123456789" nested
+  fields:
+    "dd"=<object>"{\"trace_id\":\"1234567890123456789\",\"span_id\":\"987654321\",\"service\":\"api\",\"env\":\"prod\"}"
+    "level"=<string>"info"
+    "message"=<string>"request done"
+line 8: json
+  in: "{\"@t\":\"2026-10-11T12:00:00.1230000Z\",\"@mt\":\"Order {OrderId} created\",\"@tr\":\"4bf92f3577b34da6a3ce929d0e0e4736\",\"@sp\":\"00f067aa0ba902b7\",\"OrderId\":42}"
+  level: info
+  time: 2026-10-11T12:00:00.123Z
+  roles: time=@t level=- msg=@mt
+  trace: <string>"4bf92f3577b34da6a3ce929d0e0e4736" in "@tr"
+  fields:
+    "@t"=<string>"2026-10-11T12:00:00.1230000Z"
+    "@mt"=<string>"Order {OrderId} created"
+    "@tr"=<string>"4bf92f3577b34da6a3ce929d0e0e4736"
+    "@sp"=<string>"00f067aa0ba902b7"
+    "OrderId"=<number>"42"
+line 9: json
+  in: "{\"severity\":\"INFO\",\"message\":\"request done\",\"logging.googleapis.com/trace\":\"projects/my-project/traces/4bf92f3577b34da6a3ce929d0e0e4736\",\"logging.googleapis.com/spanId\":\"00f067aa0ba902b7\",\"logging.googleapis.com/trace_sampled\":true}"
+  level: info
+  time: -
+  roles: time=- level=severity msg=message
+  trace: <string>"4bf92f3577b34da6a3ce929d0e0e4736" in "logging.googleapis.com/trace"
+  fields:
+    "severity"=<string>"INFO"
+    "message"=<string>"request done"
+    "logging.googleapis.com/trace"=<string>"projects/my-project/traces/4bf92f3577b34da6a3ce929d0e0e4736"
+    "logging.googleapis.com/spanId"=<string>"00f067aa0ba902b7"
+    "logging.googleapis.com/trace_sampled"=<bool>"true"
+line 10: logfmt
+  in: "level=info ts=2026-10-11T12:00:00.123Z caller=handler.go:42 msg=\"request done\" traceID=4bf92f3577b34da6a3ce929d0e0e4736"
+  level: info
+  time: 2026-10-11T12:00:00.123Z
+  roles: time=ts level=level msg=msg
+  trace: <string>"4bf92f3577b34da6a3ce929d0e0e4736" in "traceID"
+  fields:
+    "level"=<string>"info"
+    "ts"=<string>"2026-10-11T12:00:00.123Z"
+    "caller"=<string>"handler.go:42"
+    "msg"=<string>"request done"
+    "traceID"=<string>"4bf92f3577b34da6a3ce929d0e0e4736"
+line 11: json
+  in: "{\"level\":\"info\",\"msg\":\"started\",\"trace\":\"no id here\"}"
+  level: info
+  time: -
+  roles: time=- level=level msg=msg
+  fields:
+    "level"=<string>"info"
+    "msg"=<string>"started"
+    "trace"=<string>"no id here"
